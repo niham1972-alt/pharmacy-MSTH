@@ -1,0 +1,71 @@
+{
+  "dashboard": {
+    "title": "Dashboard",
+    "kpi": {
+      "todaySales": "Today's Sales",
+      "todayProfit": "Today's Profit",
+      "salesInRange": "Sales · {{range}}",
+      "profitInRange": "Profit · {{range}}",
+      "monthPurchases": "Total Purchases (This Month)",
+      "monthExpenses": "Total Expenses (This Month)",
+      "lowStock": "Low Stock Items",
+      "expiringSoon": "Expiring Soon",
+      "outOfStock": "Out of Stock",
+      "pendingPurchaseOrders": "Pending Purchase Orders"
+    },
+    "salesTrend": {
+      "title": "Sales Trend",
+      "revenue": "Revenue",
+      "profit": "Profit"
+    },
+    "topSelling": {
+      "title": "Top Selling Medicines",
+      "byQuantity": "By Quantity",
+      "byRevenue": "By Revenue",
+      "empty": "No sales recorded yet in this period."
+    },
+    "alerts": {
+      "title": "Low Stock & Expiry Alerts",
+      "empty": "All clear! No low-stock or expiring items right now.",
+      "acknowledge": "Acknowledge",
+      "acknowledged": "Acknowledged"
+    },
+    "activity": {
+      "title": "Recent Activity",
+      "loadMore": "Load more",
+      "empty": "No recent activity yet."
+    },
+    "purchaseSnapshot": {
+      "title": "Supplier & Purchase Snapshot",
+      "empty": "No pending purchase orders."
+    },
+    "cashSummary": {
+      "title": "Cash & Payment Summary"
+    },
+    "quickActions": {
+      "title": "Quick Actions",
+      "newSale": "New Sale",
+      "newPurchase": "New Purchase",
+      "addMedicine": "Add Medicine",
+      "addCustomer": "Add Customer"
+    },
+    "filters": {
+      "today": "Today",
+      "last7Days": "Last 7 Days",
+      "last30Days": "Last 30 Days",
+      "thisMonth": "This Month",
+      "custom": "Custom"
+    },
+    "errors": {
+      "generic": "Couldn't load this widget",
+      "retry": "Retry"
+    },
+    "empty": {
+      "noSalesToday": "No sales recorded yet today — get started with your first sale"
+    },
+    "realtime": {
+      "live": "Live",
+      "reconnecting": "Reconnecting..."
+    }
+  }
+}

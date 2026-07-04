@@ -1,0 +1,596 @@
+// Module 1: Dashboard — Prisma schema
+// Dashboard-owned models are authoritative here.
+// Cross-module models are STUBS: minimal shape needed for Dashboard queries to
+// compile and run. They will be superseded by the authoritative schema when
+// each module is built — reconcile via `prisma migrate` at that time.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard-owned tables
+// ---------------------------------------------------------------------------
+
+model DashboardWidgetPreference {
+  id         String   @id @default(uuid())
+  userId     String
+  pharmacyId String
+  branchId   String?
+  widgetKey  String // e.g. "kpi_cards", "sales_trend"
+  isVisible  Boolean  @default(true)
+  position   Int      @default(0)
+  config     Json? // widget-specific settings e.g. default date range
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, widgetKey, branchId])
+  @@index([pharmacyId, branchId])
+}
+
+model DashboardAlertAcknowledgement {
+  id             String   @id @default(uuid())
+  pharmacyId     String
+  branchId       String
+  alertType      String // "LOW_STOCK" | "EXPIRY" | "OUT_OF_STOCK"
+  referenceId    String // medicineId or batchId
+  acknowledgedBy String // userId
+  acknowledgedAt DateTime @default(now())
+  note           String?
+
+  @@index([pharmacyId, branchId, alertType])
+  @@index([referenceId])
+}
+
+model DashboardSnapshotCache {
+  id           String   @id @default(uuid())
+  pharmacyId   String
+  branchId     String
+  widgetKey    String
+  dateRangeKey String // e.g. "2026-06-01_2026-07-02"
+  payload      Json
+  generatedAt  DateTime @default(now())
+  expiresAt    DateTime
+
+  @@unique([pharmacyId, branchId, widgetKey, dateRangeKey])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Minimal cross-module stub references (read-only for this module)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Module 4: Sales / POS Billing — AUTHORITATIVE (supersedes the Module 1 stub).
+// Authoritative source of sales/profit data for Dashboard, Reports, Returns.
+// ---------------------------------------------------------------------------
+
+enum SaleStatus {
+  COMPLETED
+  VOIDED
+  PARTIALLY_RETURNED // set by Module 10
+  FULLY_RETURNED // set by Module 10
+}
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+}
+
+model Sale {
+  id               String                 @id @default(uuid())
+  pharmacyId       String
+  branchId         String
+  saleNumber       String // SL-YYYY-NNNNNN
+  cashierSessionId String
+  cashierId        String
+  customerId       String? // nullable = walk-in
+  saleDate         DateTime               @default(now())
+  status           SaleStatus             @default(COMPLETED)
+  subTotal         Decimal                @db.Decimal(14, 2)
+  discountTotal    Decimal                @default(0) @db.Decimal(14, 2)
+  taxTotal         Decimal                @default(0) @db.Decimal(14, 2)
+  grandTotal       Decimal                @db.Decimal(14, 2)
+  totalCost        Decimal                @db.Decimal(14, 2) // profit basis snapshot
+  discountApprovedBy String?
+  voidedBy         String?
+  voidedAt         DateTime?
+  voidReason       String?
+  notes            String?
+  idempotencyKey   String?
+  createdAt        DateTime               @default(now())
+  cashierSession   CashierSession         @relation(fields: [cashierSessionId], references: [id])
+  items            SaleItem[]
+  payments         SalePayment[]
+  complianceRecords SaleComplianceRecord[]
+
+  @@unique([pharmacyId, saleNumber])
+  @@unique([pharmacyId, idempotencyKey])
+  @@index([pharmacyId, branchId, saleDate])
+  @@index([cashierSessionId])
+  @@index([customerId])
+}
+
+model SaleItem {
+  id                     String  @id @default(uuid())
+  saleId                 String
+  medicineId             String
+  batchId                String? // which batch consumed (FEFO)
+  quantity               Int
+  unitPrice              Decimal @db.Decimal(12, 2) // snapshot at sale time
+  unitCost               Decimal @db.Decimal(12, 2) // snapshot at sale time
+  discountAmount         Decimal @default(0) @db.Decimal(12, 2)
+  taxRatePercent         Decimal @default(0) @db.Decimal(5, 2)
+  lineTotal              Decimal @db.Decimal(14, 2)
+  prescriptionVerifiedBy String?
+  prescriptionReference  String?
+  sale                   Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([medicineId])
+  @@index([batchId])
+}
+
+model SalePayment {
+  id              String   @id @default(uuid())
+  saleId          String
+  method          String // CASH | CARD | MOBILE | WALLET | INSURANCE
+  amount          Decimal  @db.Decimal(14, 2)
+  referenceNumber String?
+  tenderedAmount  Decimal? @db.Decimal(14, 2)
+  changeDue       Decimal? @db.Decimal(14, 2)
+  sale            Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+}
+
+model SaleComplianceRecord {
+  id                String   @id @default(uuid())
+  saleId            String
+  saleItemId        String
+  type              String // PRESCRIPTION | CONTROLLED_SUBSTANCE
+  prescribingDoctor String?
+  patientName       String?
+  patientIdNumber   String?
+  quantityDispensed Int
+  verifiedBy        String
+  isVoided          Boolean  @default(false)
+  verifiedAt        DateTime @default(now())
+  sale              Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+}
+
+model CashierSession {
+  id           String        @id @default(uuid())
+  pharmacyId   String
+  branchId     String
+  cashierId    String
+  openingFloat Decimal       @db.Decimal(14, 2)
+  expectedCash Decimal?      @db.Decimal(14, 2)
+  actualCash   Decimal?      @db.Decimal(14, 2)
+  variance     Decimal?      @db.Decimal(14, 2)
+  status       SessionStatus @default(OPEN)
+  openedAt     DateTime      @default(now())
+  closedAt     DateTime?
+  sales        Sale[]
+
+  @@index([pharmacyId, branchId, cashierId, status])
+}
+
+model ParkedSale {
+  id           String   @id @default(uuid())
+  pharmacyId   String
+  branchId     String
+  cashierId    String
+  label        String?
+  cartSnapshot Json
+  createdAt    DateTime @default(now())
+
+  @@index([pharmacyId, branchId, cashierId])
+}
+
+// ---------------------------------------------------------------------------
+// Module 2: Medicines / Products — AUTHORITATIVE (supersedes the Module 1 stub).
+// Master catalog referenced by Purchases, Sales/POS, Inventory, Batch & Expiry,
+// Barcode and Reports via `medicineId`.
+// ---------------------------------------------------------------------------
+
+enum MedicineStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+}
+
+model Medicine {
+  id                     String  @id @default(uuid())
+  pharmacyId             String
+  branchId               String? // nullable when isGlobalAcrossBranches
+  isGlobalAcrossBranches Boolean @default(false)
+
+  // Identification
+  sku            String
+  genericName    String
+  brandName      String?
+  manufacturerId String
+  categoryId     String
+  subCategoryId  String?
+
+  // Clinical / Regulatory
+  dosageFormId                String
+  strength                    String?
+  routeOfAdministration       String?
+  prescriptionRequired        Boolean @default(false)
+  controlledSubstanceSchedule String? // null = not controlled
+  storageCondition            String? // ROOM_TEMP | REFRIGERATED | FROZEN | CONTROLLED_ROOM_TEMP
+  therapeuticClass            String?
+
+  // Packaging / Units
+  baseUnitId      String
+  purchaseUnitId  String
+  saleUnitId      String
+  unitConversions MedicineUnitConversion[]
+
+  // Pricing
+  costPrice        Decimal @default(0) @db.Decimal(12, 2)
+  mrp              Decimal @default(0) @db.Decimal(12, 2)
+  sellingPrice     Decimal @default(0) @db.Decimal(12, 2)
+  taxRatePercent   Decimal @default(0) @db.Decimal(5, 2)
+  taxInclusive     Boolean @default(true)
+  discountEligible Boolean @default(true)
+
+  // Stock thresholds (Medicines owns thresholds; Inventory — Module 5 — will own
+  // live quantity). `currentStock` is TRANSITIONAL: kept here until Module 5
+  // introduces the stock ledger, so the Dashboard keeps working today.
+  reorderLevel    Int  @default(10)
+  reorderQuantity Int  @default(50)
+  maxStockLevel   Int?
+  currentStock    Int  @default(0) // TRANSITIONAL — ownership moves to Inventory (Module 5)
+
+  // Media
+  imageUrl    String?
+  documentUrl String? // SDS / package insert
+
+  // Status
+  status    MedicineStatus @default(ACTIVE)
+  isActive  Boolean        @default(true)
+  createdBy String
+  updatedBy String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  manufacturer Manufacturer      @relation(fields: [manufacturerId], references: [id])
+  category     Category          @relation(fields: [categoryId], references: [id])
+  dosageForm   DosageForm        @relation(fields: [dosageFormId], references: [id])
+  baseUnit     Unit              @relation("baseUnit", fields: [baseUnitId], references: [id])
+  purchaseUnit Unit              @relation("purchaseUnit", fields: [purchaseUnitId], references: [id])
+  saleUnit     Unit              @relation("saleUnit", fields: [saleUnitId], references: [id])
+  barcodes     MedicineBarcode[]
+  priceHistory PriceHistory[]
+
+  @@unique([pharmacyId, sku])
+  @@index([pharmacyId, branchId, isActive])
+  @@index([pharmacyId, categoryId])
+  @@index([pharmacyId, manufacturerId])
+  @@index([pharmacyId, currentStock])
+}
+
+model MedicineBarcode {
+  id         String   @id @default(uuid())
+  medicineId String
+  pharmacyId String
+  barcode    String
+  isPrimary  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  medicine   Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@unique([pharmacyId, barcode])
+  @@index([medicineId])
+}
+
+model MedicineUnitConversion {
+  id               String   @id @default(uuid())
+  medicineId       String
+  fromUnitId       String
+  toUnitId         String
+  conversionFactor Int // e.g. 1 Box = 10 Strips -> factor 10
+  medicine         Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@index([medicineId])
+}
+
+model Unit {
+  id          String     @id @default(uuid())
+  pharmacyId  String
+  name        String // "Box", "Strip", "Tablet", "Bottle", "ml"
+  symbol      String?
+  baseFor     Medicine[] @relation("baseUnit")
+  purchaseFor Medicine[] @relation("purchaseUnit")
+  saleFor     Medicine[] @relation("saleUnit")
+
+  @@unique([pharmacyId, name])
+}
+
+model Category {
+  id         String     @id @default(uuid())
+  pharmacyId String
+  name       String
+  parentId   String?
+  isActive   Boolean    @default(true)
+  parent     Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryHierarchy")
+  medicines  Medicine[]
+
+  @@unique([pharmacyId, name, parentId])
+}
+
+model Manufacturer {
+  id          String     @id @default(uuid())
+  pharmacyId  String
+  name        String
+  country     String?
+  contactInfo Json?
+  isActive    Boolean    @default(true)
+  medicines   Medicine[]
+
+  @@unique([pharmacyId, name])
+}
+
+model DosageForm {
+  id         String     @id @default(uuid())
+  pharmacyId String
+  name       String // Tablet, Capsule, Syrup, Injection...
+  medicines  Medicine[]
+
+  @@unique([pharmacyId, name])
+}
+
+model PriceHistory {
+  id          String   @id @default(uuid())
+  medicineId  String
+  pharmacyId  String
+  priceType   String // COST | MRP | SELLING
+  oldValue    Decimal  @db.Decimal(12, 2)
+  newValue    Decimal  @db.Decimal(12, 2)
+  changedBy   String
+  effectiveAt DateTime @default(now())
+  reason      String?
+  medicine    Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@index([medicineId, effectiveAt])
+}
+
+/// STUB — see Module 6 (Batch & Expiry)
+model MedicineBatch {
+  id          String   @id @default(uuid())
+  medicineId  String
+  batchNumber String
+  quantity    Int
+  expiryDate  DateTime
+  pharmacyId  String
+  branchId    String
+
+  @@index([pharmacyId, branchId, expiryDate])
+}
+
+// ---------------------------------------------------------------------------
+// Module 7 (Suppliers) — STUB. Minimal shape so Purchase Management can
+// reference real suppliers today; authoritative schema (contacts, payment
+// terms, performance) is finalized in Module 7. FK is restrict-on-delete so PO
+// history survives supplier archival (spec §21).
+// ---------------------------------------------------------------------------
+model Supplier {
+  id               String                  @id @default(uuid())
+  pharmacyId       String
+  name             String
+  contactPerson    String?
+  phone            String?
+  email            String?
+  paymentTermsDays Int                     @default(30)
+  isActive         Boolean                 @default(true)
+  createdAt        DateTime                @default(now())
+  purchaseOrders   PurchaseOrder[]
+  templates        PurchaseOrderTemplate[]
+
+  @@unique([pharmacyId, name])
+}
+
+// ---------------------------------------------------------------------------
+// Module 3: Purchase Management — AUTHORITATIVE (supersedes the Module 1 stub).
+// ---------------------------------------------------------------------------
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+  REJECTED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+model PurchaseOrder {
+  id                   String               @id @default(uuid())
+  pharmacyId           String
+  branchId             String
+  poNumber             String // PO-YYYY-NNNNNN
+  supplierId           String
+  status               PurchaseOrderStatus  @default(DRAFT)
+  paymentStatus        PaymentStatus        @default(UNPAID)
+  orderDate            DateTime             @default(now())
+  expectedDeliveryDate DateTime?
+  dueDate              DateTime? // payable due date (orderDate + supplier terms) on receipt
+  notes                String?
+  subTotal             Decimal              @default(0) @db.Decimal(14, 2)
+  taxTotal             Decimal              @default(0) @db.Decimal(14, 2)
+  grandTotal           Decimal              @default(0) @db.Decimal(14, 2)
+  amountPaid           Decimal              @default(0) @db.Decimal(14, 2)
+  isDirectGrn          Boolean              @default(false)
+  createdBy            String
+  approvedBy           String?
+  approvedAt           DateTime?
+  rejectedReason       String?
+  cancelledReason      String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  supplier             Supplier             @relation(fields: [supplierId], references: [id])
+  items                PurchaseOrderItem[]
+  goodsReceipts        GoodsReceipt[]
+  payments             PurchasePayment[]
+  attachments          PurchaseAttachment[]
+
+  @@unique([pharmacyId, poNumber])
+  @@index([pharmacyId, branchId, status])
+  @@index([pharmacyId, supplierId])
+  @@index([pharmacyId, paymentStatus])
+}
+
+model PurchaseOrderItem {
+  id               String        @id @default(uuid())
+  purchaseOrderId  String
+  medicineId       String
+  orderedQuantity  Int
+  receivedQuantity Int           @default(0)
+  expectedUnitCost Decimal       @db.Decimal(12, 2)
+  taxRatePercent   Decimal       @default(0) @db.Decimal(5, 2)
+  lineTotal        Decimal       @db.Decimal(14, 2)
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+  @@index([medicineId])
+}
+
+model GoodsReceipt {
+  id                     String               @id @default(uuid())
+  pharmacyId             String
+  branchId               String
+  grnNumber              String // GRN-YYYY-NNNNNN
+  purchaseOrderId        String
+  receivedDate           DateTime             @default(now())
+  receivedBy             String
+  notes                  String?
+  hasVariance            Boolean              @default(false)
+  varianceAcknowledgedBy String?
+  varianceNote           String?
+  createdAt              DateTime             @default(now())
+  purchaseOrder          PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  items                  GoodsReceiptItem[]
+  attachments            PurchaseAttachment[]
+
+  @@unique([pharmacyId, grnNumber])
+  @@index([pharmacyId, branchId, receivedDate])
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceiptItem {
+  id                   String       @id @default(uuid())
+  goodsReceiptId       String
+  purchaseOrderItemId  String
+  medicineId           String
+  receivedQuantity     Int
+  freeQuantity         Int          @default(0)
+  batchNumber          String
+  expiryDate           DateTime
+  actualUnitCost       Decimal      @db.Decimal(12, 2)
+  expiryOverridden     Boolean      @default(false)
+  expiryOverrideReason String?
+  goodsReceipt         GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+
+  @@index([goodsReceiptId])
+  @@index([medicineId, batchNumber])
+}
+
+model PurchasePayment {
+  id              String        @id @default(uuid())
+  pharmacyId      String
+  purchaseOrderId String
+  amount          Decimal       @db.Decimal(14, 2)
+  paymentDate     DateTime      @default(now())
+  method          String // CASH | BANK_TRANSFER | CHEQUE | CARD | OTHER
+  referenceNumber String?
+  recordedBy      String
+  notes           String?
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+}
+
+model PurchaseAttachment {
+  id              String        @id @default(uuid())
+  purchaseOrderId String?
+  goodsReceiptId  String?
+  fileUrl         String
+  fileType        String // QUOTATION | INVOICE | OTHER
+  uploadedBy      String
+  uploadedAt      DateTime      @default(now())
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  goodsReceipt    GoodsReceipt?  @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+  @@index([goodsReceiptId])
+}
+
+model PurchaseOrderTemplate {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  name       String
+  supplierId String
+  items      Json // [{ medicineId, quantity, expectedUnitCost }]
+  createdBy  String
+  createdAt  DateTime @default(now())
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([pharmacyId, name])
+}
+
+/// STUB — see Module 13 (Expenses)
+model Expense {
+  id          String   @id @default(uuid())
+  pharmacyId  String
+  branchId    String
+  amount      Decimal  @db.Decimal(12, 2)
+  expenseDate DateTime @default(now())
+  category    String
+
+  @@index([pharmacyId, branchId, expenseDate])
+}
+
+/// STUB — see Module 15 (Audit Logs)
+model AuditLog {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  branchId   String
+  userId     String
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([pharmacyId, branchId, createdAt])
+}
+
+/// STUB — see Module 18 (Settings). Dashboard reads expiry threshold,
+/// currency and timezone from here (never hardcoded), with sane fallbacks
+/// when a pharmacy hasn't configured settings yet.
+model PharmacySettings {
+  id                  String   @id @default(uuid())
+  pharmacyId          String   @unique
+  branchId            String?
+  currency            String   @default("USD")
+  timezone            String   @default("UTC")
+  expiryThresholdDays Int      @default(90)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}

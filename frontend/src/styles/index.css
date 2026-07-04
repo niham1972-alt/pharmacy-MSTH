@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+  nav,
+  aside,
+  .no-print {
+    display: none !important;
+  }
+  .print-grid {
+    display: block !important;
+  }
+}
+
+@keyframes pulse-highlight {
+  0% {
+    background-color: rgba(59, 130, 246, 0.25);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.animate-pulse-highlight {
+  animation: pulse-highlight 1.6s ease-out 1;
+}
