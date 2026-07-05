@@ -594,25 +594,115 @@ model BatchRecall {
 }
 
 // ---------------------------------------------------------------------------
-// Module 7 (Suppliers) — STUB. Minimal shape so Purchase Management can
-// reference real suppliers today; authoritative schema (contacts, payment
-// terms, performance) is finalized in Module 7. FK is restrict-on-delete so PO
-// history survives supplier archival (spec §21).
+// Module 7: Suppliers Management — AUTHORITATIVE (supersedes the Module 3 stub).
+// Suppliers are pharmacy-wide (not branch-scoped). PurchaseOrder/Template keep
+// their real FK relation; performance/payables are read-only aggregations over
+// Module 3's tables (no duplicated storage).
 // ---------------------------------------------------------------------------
-model Supplier {
-  id               String                  @id @default(uuid())
-  pharmacyId       String
-  name             String
-  contactPerson    String?
-  phone            String?
-  email            String?
-  paymentTermsDays Int                     @default(30)
-  isActive         Boolean                 @default(true)
-  createdAt        DateTime                @default(now())
-  purchaseOrders   PurchaseOrder[]
-  templates        PurchaseOrderTemplate[]
+enum SupplierType {
+  MANUFACTURER
+  DISTRIBUTOR
+  WHOLESALER
+  LOCAL_VENDOR
+}
 
-  @@unique([pharmacyId, name])
+model Supplier {
+  id                    String       @id @default(uuid())
+  pharmacyId            String
+  companyName           String
+  tradingName           String?
+  supplierType          SupplierType
+  taxRegistrationNumber String?
+  drugLicenseNumber     String?
+  drugLicenseExpiry     DateTime?
+  paymentTermsCode      String       @default("NET_30") // NET_15 | NET_30 | NET_45 | NET_60 | COD | ADVANCE
+  currency              String       @default("PKR")
+  bankAccountDetails    Json? // reference only — sensitive, redacted for non-admin/accountant
+  notes                 String?
+  isActive              Boolean      @default(true)
+  createdBy             String
+  updatedBy             String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  contacts       SupplierContact[]
+  addresses      SupplierAddress[]
+  documents      SupplierDocument[]
+  medicinePrices SupplierMedicinePrice[]
+  purchaseOrders PurchaseOrder[]
+  templates      PurchaseOrderTemplate[]
+
+  @@unique([pharmacyId, companyName])
+  @@index([pharmacyId, isActive])
+  @@index([pharmacyId, supplierType])
+}
+
+model SupplierContact {
+  id          String   @id @default(uuid())
+  supplierId  String
+  name        String
+  designation String?
+  phone       String?
+  email       String?
+  isPrimary   Boolean  @default(false)
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+}
+
+model SupplierAddress {
+  id           String   @id @default(uuid())
+  supplierId   String
+  type         String // BILLING | WAREHOUSE | OTHER
+  addressLine1 String
+  addressLine2 String?
+  city         String?
+  state        String?
+  country      String?
+  postalCode   String?
+  supplier     Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+}
+
+model SupplierDocument {
+  id           String    @id @default(uuid())
+  supplierId   String
+  documentType String // DRUG_LICENSE | TAX_CERTIFICATE | BUSINESS_REGISTRATION | CONTRACT | OTHER
+  fileUrl      String
+  expiryDate   DateTime?
+  uploadedBy   String
+  uploadedAt   DateTime  @default(now())
+  supplier     Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([expiryDate])
+}
+
+model SupplierMedicinePrice {
+  id             String    @id @default(uuid())
+  supplierId     String
+  medicineId     String // loose ref to Module 2
+  negotiatedCost Decimal   @db.Decimal(12, 2)
+  effectiveFrom  DateTime  @default(now())
+  effectiveTo    DateTime?
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  supplier       Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, medicineId, effectiveFrom])
+  @@index([supplierId, medicineId])
+}
+
+model MedicinePreferredSupplier {
+  id         String @id @default(uuid())
+  pharmacyId String
+  medicineId String // loose ref to Module 2
+  supplierId String
+  priority   Int    @default(1)
+
+  @@unique([pharmacyId, medicineId, supplierId])
+  @@index([medicineId])
 }
 
 // ---------------------------------------------------------------------------

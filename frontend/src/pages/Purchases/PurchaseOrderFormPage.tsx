@@ -3,14 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiClientError } from '../../shared/api/client';
 import { formatCurrency } from '../../features/dashboard/utils/formatCurrency';
 import { purchasesApi } from '../../features/purchases/api/purchases.api';
-import { useSuppliers } from '../../features/purchases/hooks/usePurchases';
 import { MedicinePicker } from '../../features/purchases/components/MedicinePicker';
+import { SupplierPicker } from '../../features/suppliers/components/SupplierPicker';
 import { POLineInput } from '../../features/purchases/types/purchase.types';
 
 export function PurchaseOrderFormPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { data: suppliers } = useSuppliers();
   const [supplierId, setSupplierId] = useState('');
   const [notes, setNotes] = useState('');
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
@@ -70,10 +69,7 @@ export function PurchaseOrderFormPage() {
 
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="block"><span className="text-xs text-gray-500">Supplier *</span>
-          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={`${inputCls} block w-full`}>
-            <option value="">Select…</option>
-            {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <SupplierPicker value={supplierId} onChange={setSupplierId} className="mt-0" />
         </label>
         <label className="block"><span className="text-xs text-gray-500">Expected Delivery</span>
           <input type="date" value={expectedDeliveryDate} onChange={(e) => setExpectedDeliveryDate(e.target.value)} className={`${inputCls} block w-full`} />

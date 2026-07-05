@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../../common/audit/audit-log.interface';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
@@ -71,17 +72,31 @@ export class PurchasePaymentsService {
     }));
   }
 
-  /** Suppliers stub (Module 7) — minimal list/create so PO forms have suppliers. */
-  suppliers(user: AuthenticatedUser) {
-    return this.prisma.supplier.findMany({ where: { pharmacyId: user.pharmacyId, isActive: true }, orderBy: { name: 'asc' } });
+  /** Active-supplier list for the PO picker (Module 7 owns suppliers). `name`
+   * alias keeps the existing Purchases UI working unchanged. */
+  async suppliers(user: AuthenticatedUser) {
+    const rows = await this.prisma.supplier.findMany({ where: { pharmacyId: user.pharmacyId, isActive: true }, orderBy: { companyName: 'asc' }, select: { id: true, companyName: true, paymentTermsCode: true } });
+    return rows.map((s) => ({ id: s.id, name: s.companyName, companyName: s.companyName, paymentTermsCode: s.paymentTermsCode }));
   }
 
-  async createSupplier(user: AuthenticatedUser, data: { name: string; contactPerson?: string; phone?: string; email?: string; paymentTermsDays?: number }) {
+  /** Quick-add supplier from the PO form (full profiles live in Module 7). */
+  async createSupplier(user: AuthenticatedUser, data: { name: string; contactPerson?: string; phone?: string; email?: string; paymentTermsCode?: string; supplierType?: string }) {
     if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'inventory_manager') {
       throw new ForbiddenException({ errorCode: 'FORBIDDEN', message: 'Not permitted to create suppliers.' });
     }
-    return this.prisma.supplier.create({
-      data: { pharmacyId: user.pharmacyId, name: data.name, contactPerson: data.contactPerson, phone: data.phone, email: data.email, paymentTermsDays: data.paymentTermsDays ?? 30 },
+    const s = await this.prisma.supplier.create({
+      data: {
+        pharmacyId: user.pharmacyId,
+        companyName: data.name,
+        supplierType: (data.supplierType as Prisma.SupplierCreateInput['supplierType']) ?? 'DISTRIBUTOR',
+        paymentTermsCode: data.paymentTermsCode ?? 'NET_30',
+        currency: 'PKR',
+        createdBy: user.userId,
+        ...(data.contactPerson || data.phone || data.email
+          ? { contacts: { create: [{ name: data.contactPerson ?? data.name, phone: data.phone, email: data.email, isPrimary: true }] } }
+          : {}),
+      },
     });
+    return { id: s.id, name: s.companyName, companyName: s.companyName };
   }
 }

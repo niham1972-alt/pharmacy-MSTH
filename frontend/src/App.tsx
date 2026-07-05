@@ -26,6 +26,10 @@ import { BatchDetailPage } from './pages/Batches/BatchDetailPage';
 import { ExpiringStockPage } from './pages/Batches/ExpiringStockPage';
 import { ExpiredStockReviewPage } from './pages/Batches/ExpiredStockReviewPage';
 import { RecallsPage } from './pages/Batches/RecallsPage';
+import { SuppliersListPage } from './pages/Suppliers/SuppliersListPage';
+import { SupplierDetailPage } from './pages/Suppliers/SupplierDetailPage';
+import { SupplierFormPage } from './pages/Suppliers/SupplierFormPage';
+import { SuppliersNeedingAttentionPage } from './pages/Suppliers/SuppliersNeedingAttentionPage';
 
 function ProtectedLayout() {
   return (
@@ -70,6 +74,13 @@ function BatchesGate() {
   return <Outlet />;
 }
 
+/** Suppliers: cashier has zero access (spec §13). */
+function SuppliersGate() {
+  const { user } = useAuth();
+  if (user?.role === 'cashier') return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -108,6 +119,13 @@ export default function App() {
           <Route path="/batches/expired" element={<ExpiredStockReviewPage />} />
           <Route path="/batches/recalls" element={<RecallsPage />} />
           <Route path="/batches/:id" element={<BatchDetailPage />} />
+        </Route>
+        <Route element={<SuppliersGate />}>
+          <Route path="/suppliers" element={<SuppliersListPage />} />
+          <Route path="/suppliers/new" element={<SupplierFormPage />} />
+          <Route path="/suppliers/attention" element={<SuppliersNeedingAttentionPage />} />
+          <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
+          <Route path="/suppliers/:id/edit" element={<SupplierFormPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

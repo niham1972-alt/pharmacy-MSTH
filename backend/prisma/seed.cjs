@@ -85,7 +85,8 @@ async function main() {
   await prisma.dosageForm.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.unit.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.purchaseOrder.deleteMany({ where: { pharmacyId: PHARMACY_ID } }); // cascades items/GRNs/payments
-  await prisma.supplier.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.medicinePreferredSupplier.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.supplier.deleteMany({ where: { pharmacyId: PHARMACY_ID } }); // cascades contacts/addresses/documents/prices
   await prisma.expense.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.auditLog.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
 
@@ -283,18 +284,41 @@ async function main() {
   }
   console.log('  sales:', saleCount, '| sale items:', itemCount, '| 1 closed session');
 
-  // --- Suppliers (stub for Module 7) ---------------------------------------
+  // --- Suppliers (Module 7, authoritative) ---------------------------------
   const SUPPLIERS = [
-    ['Muller & Phipps Pakistan', 30],
-    ['United Distributors Ltd', 45],
-    ['Pharma Traders', 15],
+    { companyName: 'Muller & Phipps Pakistan', tradingName: 'M&P', supplierType: 'DISTRIBUTOR', terms: 'NET_30', license: 'DL-MP-2024-118', licenseDays: 45, contact: { name: 'Imran Sheikh', designation: 'Key Account Manager', phone: '021-111-222-333', email: 'imran@mnp.example' } },
+    { companyName: 'United Distributors Ltd', tradingName: 'UDL', supplierType: 'DISTRIBUTOR', terms: 'NET_45', license: 'DL-UDL-2023-441', licenseDays: -10, contact: { name: 'Sara Khan', designation: 'Sales Rep', phone: '042-111-999-000', email: 'sara@udl.example' } },
+    { companyName: 'Pharma Traders', tradingName: null, supplierType: 'WHOLESALER', terms: 'NET_15', license: null, licenseDays: null, contact: { name: 'Bilal Ahmed', designation: 'Owner', phone: '0300-1234567', email: 'bilal@pharmatraders.example' } },
+    { companyName: 'GSK Pakistan', tradingName: 'GSK', supplierType: 'MANUFACTURER', terms: 'ADVANCE', license: 'DL-GSK-2025-007', licenseDays: 500, contact: { name: 'Accounts Desk', designation: 'Accounts', phone: '021-500-500-500', email: 'ap@gsk.example' } },
   ];
   const supplierIds = [];
-  for (const [name, terms] of SUPPLIERS) {
-    const s = await prisma.supplier.create({ data: { pharmacyId: PHARMACY_ID, name, contactPerson: 'Sales Desk', phone: '021-1234567', paymentTermsDays: terms } });
+  for (const sp of SUPPLIERS) {
+    const s = await prisma.supplier.create({
+      data: {
+        pharmacyId: PHARMACY_ID,
+        companyName: sp.companyName,
+        tradingName: sp.tradingName,
+        supplierType: sp.supplierType,
+        drugLicenseNumber: sp.license,
+        drugLicenseExpiry: sp.licenseDays == null ? null : daysAhead(sp.licenseDays),
+        paymentTermsCode: sp.terms,
+        currency: 'PKR',
+        bankAccountDetails: { bankName: 'HBL', accountNumber: '0001-2345-6789', branch: sp.companyName.slice(0, 8) },
+        createdBy: ADMIN_ID,
+        contacts: { create: [{ name: sp.contact.name, designation: sp.contact.designation, phone: sp.contact.phone, email: sp.contact.email, isPrimary: true }] },
+        addresses: { create: [{ type: 'WAREHOUSE', addressLine1: 'Plot 12, Industrial Area', city: 'Karachi', country: 'Pakistan' }] },
+      },
+    });
     supplierIds.push(s.id);
+    if (sp.license) {
+      await prisma.supplierDocument.create({ data: { supplierId: s.id, documentType: 'DRUG_LICENSE', fileUrl: `https://example.com/licenses/${sp.license}.pdf`, expiryDate: daysAhead(sp.licenseDays), uploadedBy: ADMIN_ID } });
+    }
   }
-  console.log('  suppliers:', supplierIds.length);
+  // Negotiated price + preferred supplier for the first two medicines (demo).
+  await prisma.supplierMedicinePrice.create({ data: { supplierId: supplierIds[0], medicineId: meds[0].id, negotiatedCost: Math.round(meds[0].cost * 0.92 * 100) / 100, createdBy: ADMIN_ID } });
+  await prisma.medicinePreferredSupplier.create({ data: { pharmacyId: PHARMACY_ID, medicineId: meds[0].id, supplierId: supplierIds[0], priority: 1 } });
+  await prisma.medicinePreferredSupplier.create({ data: { pharmacyId: PHARMACY_ID, medicineId: meds[1].id, supplierId: supplierIds[3], priority: 1 } });
+  console.log('  suppliers:', supplierIds.length, '(+ contacts, docs, 1 negotiated price, 2 preferred)');
 
   // --- Purchase orders (Module 3 lifecycle) --------------------------------
   // status, orderAgoDays, paymentStatus, paidFraction, dueAgoDays (+past/overdue, -future, null=none)

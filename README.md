@@ -1,4 +1,4 @@
-# Pharmacy Management System — Modules 1–6 (Dashboard · Medicines · Purchases · Sales/POS · Inventory · Batch & Expiry)
+# Pharmacy Management System — Modules 1–7 (Dashboard · Medicines · Purchases · Sales/POS · Inventory · Batch & Expiry · Suppliers)
 
 Enterprise Pharmacy Management Software, built module by module. This is **Module 1: Dashboard** — the role-aware operational landing screen. 17 other modules (Medicines, Sales/POS, Inventory, Batch & Expiry, Suppliers, Customers, Returns, Stock Adjustment, Barcode, Expenses, Reports, Audit Logs, Users & Roles, Backup & Restore, Settings, Purchases, ...) do not exist yet — the Dashboard depends on clearly-marked **stub** Prisma models for them (see `backend/prisma/schema.prisma`) that later modules will supersede.
 
@@ -214,6 +214,22 @@ isBatchSellable({ batchId })        // THE single hard-block enforcement point
 HTTP endpoints (base `/api/batches`): `GET /` (filter/sort/paginate), `/:id` (detail + linked GRN + traceability sales + write-off/recall history), `/expiring?thresholdDays=` (tiered), `/expired`, `POST /write-off` + `GET /write-offs` (permanent compliance record, reason EXPIRY_WRITE_OFF via Module 5), `POST /:id/recall` (idempotent) + `GET /recalls` + `POST /recalls/:id/resolve` + `/recalls/:id/affected-sales`. `cashier` has **no** direct access (indirect via POS only); write-off = admin/inventory_manager, recall = admin/pharmacist.
 
 Frontend: `frontend/src/pages/Batches/*` (list w/ status badges + day-tier chips, detail with traceability + Flag-Recall/Write-Off actions, tiered Expiring-Soon view, Expired-Stock multi-select write-off, Recalls with resolve + affected-sales). Shared `BatchStatusBadge`/`ExpiryChip` reuse Module 1's colour convention.
+
+## Module 7: Suppliers Management
+
+The **authoritative supplier/vendor master data**. Migration `20260707000000_suppliers_module` **supersedes the Module 3 `Supplier` stub** (`name`→`companyName`, adds `supplierType`/license/`paymentTermsCode`/`currency`/`bankAccountDetails`/`createdBy`) and adds `SupplierContact`, `SupplierAddress`, `SupplierDocument`, `SupplierMedicinePrice`, `MedicinePreferredSupplier` + `SupplierType` enum. `PurchaseOrder.supplierId` was already a real FK — the relation is now backed by the full model.
+
+**Full CRUD + archive + guarded hard-delete** (blocked if any PO/template references it — mirrors Module 2's medicine guard). Sub-entities: contacts (at most one primary, auto-unset enforced server-side), addresses, compliance documents (with tiered license-expiry status), negotiated pricing (`SupplierMedicinePrice`, deterministic current-price resolution: latest `effectiveFrom ≤ now` with an open window), preferred suppliers (`MedicinePreferredSupplier`, consumed by Module 5 reorder → PO deep-link).
+
+`SupplierPerformanceService` **reads Module 3's tables** (PO/GRN/payment) as read-only aggregations — total spend, on-time %, variance frequency, avg payment turnaround, per-supplier + all-suppliers payables — no duplicated storage, batched `groupBy` (no N+1). Archived suppliers with debt still surface in payables.
+
+`bankAccountDetails` is **redacted** from API responses for anyone other than `admin`/`super_admin`/`accountant` (verified live: `inventory_manager` sees the profile but not banking). All writes audit-logged, with before/after diffs on financially-sensitive fields (`paymentTermsCode`, `bankAccountDetails`).
+
+`paymentTermsCode` → net-days lives in one shared helper (`modules/suppliers/payment-terms.ts`), used by both Module 7 and Module 3's PO due-date calc. Module 3's PO/GRN/dashboard read paths expose a `name` alias (= `companyName`) so the existing Purchases UI works unchanged.
+
+HTTP endpoints (base `/api/suppliers`): `GET /` (filter/sort/paginate), `/active` (picker), `/:id`, `POST /`, `PUT /:id`, `POST /:id/archive`, `DELETE /:id`, contacts/addresses/documents sub-routes, `/:id/pricing`, `/:id/performance`, `/:id/payables`, `/payables-summary`, `/needing-attention`, and `/api/medicine-preferred-suppliers`. `cashier` has zero access.
+
+Frontend: `frontend/src/pages/Suppliers/*` (list w/ type/license/spend/outstanding, tabbed detail — Overview/Contacts/Documents/Pricing/Performance/Payables, sectioned create/edit form with a repeatable contacts editor, Needing-Attention view). **`SupplierPicker`** (`features/suppliers/components/`) is the shared searchable select — built here, **reused in Module 3's PO form** (excludes archived suppliers).
 
 ## Role-permission matrix
 

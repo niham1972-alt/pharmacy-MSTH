@@ -8,6 +8,7 @@ import { PurchaseConfigService } from './purchase-config.service';
 import { PurchaseEventsEmitter } from './events/purchase-events.emitter';
 import { MedicineCostSyncService } from './integrations/medicine-cost-sync.service';
 import { BatchesService } from '../batches/batches.service';
+import { paymentTermDays } from '../suppliers/payment-terms';
 import { CreateGrnDto } from './dto/create-grn.dto';
 import { dec } from './purchase-orders.service';
 
@@ -113,7 +114,7 @@ export class GoodsReceiptsService {
             status: 'RECEIVED',
             isDirectGrn: true,
             orderDate: now,
-            dueDate: new Date(now.getTime() + (supplier?.paymentTermsDays ?? 30) * 86400000),
+            dueDate: new Date(now.getTime() + paymentTermDays(supplier?.paymentTermsCode) * 86400000),
             subTotal,
             grandTotal: subTotal,
             createdBy: user.userId,
@@ -221,7 +222,7 @@ export class GoodsReceiptsService {
           where: { id: poId },
           data: {
             status: allReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
-            dueDate: after!.dueDate ?? new Date(now.getTime() + (supplier?.paymentTermsDays ?? 30) * 86400000),
+            dueDate: after!.dueDate ?? new Date(now.getTime() + paymentTermDays(supplier?.paymentTermsCode) * 86400000),
           },
         });
       }
@@ -265,7 +266,7 @@ export class GoodsReceiptsService {
         orderBy: { receivedDate: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        include: { purchaseOrder: { select: { poNumber: true, supplier: { select: { name: true } } } }, _count: { select: { items: true } } },
+        include: { purchaseOrder: { select: { poNumber: true, supplier: { select: { companyName: true } } } }, _count: { select: { items: true } } },
       }),
     ]);
     return {
@@ -277,7 +278,7 @@ export class GoodsReceiptsService {
         id: g.id,
         grnNumber: g.grnNumber,
         poNumber: g.purchaseOrder.poNumber,
-        supplierName: g.purchaseOrder.supplier?.name ?? null,
+        supplierName: g.purchaseOrder.supplier?.companyName ?? null,
         receivedDate: g.receivedDate.toISOString(),
         itemCount: g._count.items,
         hasVariance: g.hasVariance,
@@ -288,7 +289,7 @@ export class GoodsReceiptsService {
   async getById(user: AuthenticatedUser, id: string) {
     const g = await this.prisma.goodsReceipt.findFirst({
       where: { id, pharmacyId: user.pharmacyId },
-      include: { items: true, purchaseOrder: { select: { poNumber: true, supplierId: true, supplier: { select: { name: true } } } } },
+      include: { items: true, purchaseOrder: { select: { poNumber: true, supplierId: true, supplier: { select: { companyName: true } } } } },
     });
     if (!g) throw new NotFoundException({ errorCode: 'GRN_NOT_FOUND', message: 'Goods receipt not found' });
     const medIds = [...new Set(g.items.map((i) => i.medicineId))];
@@ -299,7 +300,7 @@ export class GoodsReceiptsService {
       grnNumber: g.grnNumber,
       purchaseOrderId: g.purchaseOrderId,
       poNumber: g.purchaseOrder.poNumber,
-      supplierName: g.purchaseOrder.supplier?.name ?? null,
+      supplierName: g.purchaseOrder.supplier?.companyName ?? null,
       receivedDate: g.receivedDate.toISOString(),
       notes: g.notes,
       hasVariance: g.hasVariance,

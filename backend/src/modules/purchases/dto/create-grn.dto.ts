@@ -108,7 +108,10 @@ export class SupplierDto {
   email?: string;
 
   @IsOptional()
-  @IsInt()
-  @Min(0)
-  paymentTermsDays?: number;
+  @IsString()
+  paymentTermsCode?: string;
+
+  @IsOptional()
+  @IsString()
+  supplierType?: string;
 }

@@ -24,9 +24,9 @@ export class PurchasesRepository {
     return `${kind}-${year}-${seq}`;
   }
 
-  // --- Suppliers (stub for Module 7) ---------------------------------------
+  // --- Suppliers (owned by Module 7; read here for PO wiring) --------------
   suppliers(pharmacyId: string) {
-    return this.prisma.supplier.findMany({ where: { pharmacyId, isActive: true }, orderBy: { name: 'asc' } });
+    return this.prisma.supplier.findMany({ where: { pharmacyId, isActive: true }, orderBy: { companyName: 'asc' } });
   }
 
   supplierById(pharmacyId: string, id: string) {
@@ -49,7 +49,7 @@ export class PurchasesRepository {
     if (q.search) {
       where.OR = [
         { poNumber: { contains: q.search, mode: 'insensitive' } },
-        { supplier: { name: { contains: q.search, mode: 'insensitive' } } },
+        { supplier: { companyName: { contains: q.search, mode: 'insensitive' } } },
       ];
     }
 
@@ -64,7 +64,7 @@ export class PurchasesRepository {
         orderBy,
         skip: (page - 1) * limit,
         take: limit,
-        include: { supplier: { select: { id: true, name: true } }, _count: { select: { items: true } } },
+        include: { supplier: { select: { id: true, companyName: true } }, _count: { select: { items: true } } },
       }),
     ]);
     return { total, rows, page, limit };
@@ -90,7 +90,7 @@ export class PurchasesRepository {
   pendingApprovals(pharmacyId: string, branchId: string) {
     return this.prisma.purchaseOrder.findMany({
       where: { pharmacyId, branchId, status: 'PENDING_APPROVAL' },
-      include: { supplier: { select: { name: true } }, _count: { select: { items: true } } },
+      include: { supplier: { select: { companyName: true } }, _count: { select: { items: true } } },
       orderBy: { createdAt: 'asc' },
     });
   }

@@ -279,7 +279,7 @@ export class DashboardService {
         id: o.id,
         poNumber: o.poNumber,
         supplierId: o.supplierId,
-        supplierName: o.supplier?.name ?? null,
+        supplierName: o.supplier?.companyName ?? null,
         status: o.status,
         totalAmount: toNumber(o.grandTotal),
         createdAt: o.createdAt.toISOString(),

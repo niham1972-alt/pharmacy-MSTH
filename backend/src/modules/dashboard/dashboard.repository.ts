@@ -259,13 +259,13 @@ export class DashboardRepository {
   }
 
   async getPendingPurchaseOrders(pharmacyId: string, branchId: string): Promise<
-    Array<{ id: string; poNumber: string; supplierId: string; status: string; grandTotal: Prisma.Decimal; createdAt: Date; supplier: { name: string } | null }>
+    Array<{ id: string; poNumber: string; supplierId: string; status: string; grandTotal: Prisma.Decimal; createdAt: Date; supplier: { companyName: string } | null }>
   > {
     return this.prisma.purchaseOrder.findMany({
       where: { pharmacyId, branchId, status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PARTIALLY_RECEIVED'] } },
       orderBy: { createdAt: 'desc' },
       take: 20,
-      include: { supplier: { select: { name: true } } },
+      include: { supplier: { select: { companyName: true } } },
     });
   }
 

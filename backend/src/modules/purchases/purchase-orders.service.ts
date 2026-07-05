@@ -68,7 +68,8 @@ export class PurchaseOrdersService {
       data: rows.map((o) => ({
         id: o.id,
         poNumber: o.poNumber,
-        supplier: o.supplier,
+        // `name` alias so the existing Purchases UI keeps working against Module 7.
+        supplier: o.supplier ? { id: o.supplier.id, name: o.supplier.companyName, companyName: o.supplier.companyName } : null,
         status: o.status,
         paymentStatus: o.paymentStatus,
         orderDate: o.orderDate.toISOString(),
@@ -95,7 +96,8 @@ export class PurchaseOrdersService {
     return {
       id: po.id,
       poNumber: po.poNumber,
-      supplier: po.supplier,
+      // Safe subset (no bank details) + `name` alias for the existing UI.
+      supplier: po.supplier ? { id: po.supplier.id, name: po.supplier.companyName, companyName: po.supplier.companyName, supplierType: po.supplier.supplierType, paymentTermsCode: po.supplier.paymentTermsCode } : null,
       status: po.status,
       paymentStatus: po.paymentStatus,
       orderDate: po.orderDate.toISOString(),
@@ -290,7 +292,7 @@ export class PurchaseOrdersService {
   async pendingApprovals(user: AuthenticatedUser, branchId?: string) {
     const scope = this.resolveBranch(user, branchId);
     const rows = await this.repo.pendingApprovals(user.pharmacyId, scope);
-    return rows.map((o) => ({ id: o.id, poNumber: o.poNumber, supplierName: o.supplier?.name ?? null, grandTotal: dec(o.grandTotal), itemCount: o._count.items, createdAt: o.createdAt.toISOString() }));
+    return rows.map((o) => ({ id: o.id, poNumber: o.poNumber, supplierName: o.supplier?.companyName ?? null, grandTotal: dec(o.grandTotal), itemCount: o._count.items, createdAt: o.createdAt.toISOString() }));
   }
 
   async summary(user: AuthenticatedUser, branchId?: string) {
