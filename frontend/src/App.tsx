@@ -30,6 +30,10 @@ import { SuppliersListPage } from './pages/Suppliers/SuppliersListPage';
 import { SupplierDetailPage } from './pages/Suppliers/SupplierDetailPage';
 import { SupplierFormPage } from './pages/Suppliers/SupplierFormPage';
 import { SuppliersNeedingAttentionPage } from './pages/Suppliers/SuppliersNeedingAttentionPage';
+import { CustomersListPage } from './pages/Customers/CustomersListPage';
+import { CustomerDetailPage } from './pages/Customers/CustomerDetailPage';
+import { CustomerFormPage } from './pages/Customers/CustomerFormPage';
+import { MergeDuplicatesPage } from './pages/Customers/MergeDuplicatesPage';
 
 function ProtectedLayout() {
   return (
@@ -81,6 +85,14 @@ function SuppliersGate() {
   return <Outlet />;
 }
 
+/** Customers: cashier reaches customers only via the POS selector; the dedicated
+ * UI + inventory_manager are excluded (spec §13, elevated privacy posture). */
+function CustomersGate() {
+  const { user } = useAuth();
+  if (['cashier', 'inventory_manager'].includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -126,6 +138,13 @@ export default function App() {
           <Route path="/suppliers/attention" element={<SuppliersNeedingAttentionPage />} />
           <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
           <Route path="/suppliers/:id/edit" element={<SupplierFormPage />} />
+        </Route>
+        <Route element={<CustomersGate />}>
+          <Route path="/customers" element={<CustomersListPage />} />
+          <Route path="/customers/new" element={<CustomerFormPage />} />
+          <Route path="/customers/merge" element={<MergeDuplicatesPage />} />
+          <Route path="/customers/:id" element={<CustomerDetailPage />} />
+          <Route path="/customers/:id/edit" element={<CustomerFormPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -22,11 +22,11 @@ export function CustomerSelector({ customerName, onSelect }: { customerName: str
   }, [debounced, open]);
 
   const quickAdd = async () => {
-    if (!addName.trim()) return;
+    if (!addName.trim() || !addPhone.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await customersApi.create(addName.trim(), addPhone.trim() || undefined);
+      const res = await customersApi.create(addName.trim(), addPhone.trim());
       onSelect(res.data.id, res.data.name);
       setOpen(false);
       setAddName('');
@@ -62,10 +62,10 @@ export function CustomerSelector({ customerName, onSelect }: { customerName: str
           <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-2">
             <p className="mb-1 text-xs font-medium text-gray-500">+ Quick add</p>
             <div className="flex gap-1">
-              <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Name" className="w-1/2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1" />
-              <input value={addPhone} onChange={(e) => setAddPhone(e.target.value)} placeholder="Phone" className="w-1/2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1" />
+              <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Name *" className="w-1/2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1" />
+              <input value={addPhone} onChange={(e) => setAddPhone(e.target.value)} placeholder="Phone *" className="w-1/2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1" />
             </div>
-            <button onClick={quickAdd} disabled={busy || !addName.trim()} className="mt-1 w-full rounded bg-brand-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">{busy ? 'Adding…' : 'Add & select'}</button>
+            <button onClick={quickAdd} disabled={busy || !addName.trim() || !addPhone.trim()} className="mt-1 w-full rounded bg-brand-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">{busy ? 'Adding…' : 'Add & select'}</button>
             {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
           </div>
         </div>

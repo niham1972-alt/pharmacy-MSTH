@@ -70,6 +70,8 @@ async function main() {
 
   // --- Clean (order matters: FKs) ------------------------------------------
   await prisma.sale.deleteMany({ where: { pharmacyId: PHARMACY_ID } }); // cascades items/payments/compliance
+  await prisma.customer.deleteMany({ where: { pharmacyId: PHARMACY_ID } }); // cascades health/prescriptions/tags/notes
+  await prisma.customerTag.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.cashierSession.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.parkedSale.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.stockLedgerEntry.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
@@ -236,6 +238,32 @@ async function main() {
   }
   console.log('  batches:', batchCount);
 
+  // --- Customers (Module 8) ------------------------------------------------
+  const tagChronic = await prisma.customerTag.create({ data: { pharmacyId: PHARMACY_ID, name: 'Chronic - Diabetes', color: '#f59e0b' } });
+  const tagSenior = await prisma.customerTag.create({ data: { pharmacyId: PHARMACY_ID, name: 'Senior Citizen', color: '#6366f1' } });
+  const CUSTOMERS = [
+    { name: 'Ahmed Ali', phone: '0300-1112223', dob: '1958-04-12', allergies: ['Penicillin'], conditions: ['Diabetes Type 2', 'Hypertension'], tags: [tagChronic.id, tagSenior.id] },
+    { name: 'Fatima Noor', phone: '0321-4445556', dob: '1990-09-30', allergies: [], conditions: [], tags: [] },
+    { name: 'Bilal Hussain', phone: '0333-7778889', dob: '1975-01-20', allergies: ['Sulfa'], conditions: ['Asthma'], tags: [] },
+    { name: 'Ayesha Khan', phone: '0345-2223334', dob: '1985-06-15', allergies: [], conditions: [], tags: [] },
+  ];
+  const customerIds = [];
+  for (const c of CUSTOMERS) {
+    const cust = await prisma.customer.create({
+      data: {
+        pharmacyId: PHARMACY_ID, name: c.name, phone: c.phone, dateOfBirth: new Date(c.dob), city: 'Karachi', consentHealthDataStorage: true, createdBy: ADMIN_ID,
+        ...(c.allergies.length || c.conditions.length
+          ? { healthProfile: { create: { allergyTags: c.allergies, chronicConditionTags: c.conditions, updatedBy: ADMIN_ID } } }
+          : {}),
+        ...(c.tags.length ? { tags: { create: c.tags.map((tagId) => ({ tagId, assignedBy: ADMIN_ID })) } } : {}),
+      },
+    });
+    customerIds.push(cust.id);
+  }
+  // A prescription on file for the chronic patient.
+  await prisma.prescriptionRecord.create({ data: { pharmacyId: PHARMACY_ID, customerId: customerIds[0], referenceNumber: 'RX-2026-0091', prescribingDoctor: 'Dr. Saeed', issuedDate: daysAgo(20), uploadedBy: ADMIN_ID, notes: 'Metformin 500mg — monthly refill' } });
+  console.log('  customers:', customerIds.length, '(+ 2 tags, health profiles, 1 prescription)');
+
   // --- Cashier session (historical, CLOSED) + Sales over last 30 days ------
   const session = await prisma.cashierSession.create({
     data: { pharmacyId: PHARMACY_ID, branchId: BRANCH_ID, cashierId: ADMIN_ID, openingFloat: 5000, status: 'CLOSED', openedAt: daysAgo(30, 8), closedAt: daysAgo(0, 22), expectedCash: 0, actualCash: 0, variance: 0 },
@@ -269,6 +297,7 @@ async function main() {
           saleNumber: `SL-2026-${String(saleSeq++).padStart(6, '0')}`,
           cashierSessionId: session.id,
           cashierId: ADMIN_ID,
+          customerId: Math.random() < 0.3 ? pick(customerIds) : null, // ~30% linked to a customer
           saleDate: daysAgo(d, randInt(9, 21)),
           status,
           subTotal: grandTotal,

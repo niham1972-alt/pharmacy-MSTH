@@ -1,4 +1,4 @@
-# Pharmacy Management System — Modules 1–7 (Dashboard · Medicines · Purchases · Sales/POS · Inventory · Batch & Expiry · Suppliers)
+# Pharmacy Management System — Modules 1–8 (Dashboard · Medicines · Purchases · Sales/POS · Inventory · Batch & Expiry · Suppliers · Customers)
 
 Enterprise Pharmacy Management Software, built module by module. This is **Module 1: Dashboard** — the role-aware operational landing screen. 17 other modules (Medicines, Sales/POS, Inventory, Batch & Expiry, Suppliers, Customers, Returns, Stock Adjustment, Barcode, Expenses, Reports, Audit Logs, Users & Roles, Backup & Restore, Settings, Purchases, ...) do not exist yet — the Dashboard depends on clearly-marked **stub** Prisma models for them (see `backend/prisma/schema.prisma`) that later modules will supersede.
 
@@ -230,6 +230,21 @@ The **authoritative supplier/vendor master data**. Migration `20260707000000_sup
 HTTP endpoints (base `/api/suppliers`): `GET /` (filter/sort/paginate), `/active` (picker), `/:id`, `POST /`, `PUT /:id`, `POST /:id/archive`, `DELETE /:id`, contacts/addresses/documents sub-routes, `/:id/pricing`, `/:id/performance`, `/:id/payables`, `/payables-summary`, `/needing-attention`, and `/api/medicine-preferred-suppliers`. `cashier` has zero access.
 
 Frontend: `frontend/src/pages/Suppliers/*` (list w/ type/license/spend/outstanding, tabbed detail — Overview/Contacts/Documents/Pricing/Performance/Payables, sectioned create/edit form with a repeatable contacts editor, Needing-Attention view). **`SupplierPicker`** (`features/suppliers/components/`) is the shared searchable select — built here, **reused in Module 3's PO form** (excludes archived suppliers).
+
+## Module 8: Customers / Patients
+
+> ### ⚠️ Elevated privacy posture — read before touching this module
+> This module handles **personal + health-adjacent data** (allergies, chronic conditions, prescriptions) and carries the **highest privacy sensitivity** in the system. Health data lives in a **separate table** (`CustomerHealthProfile`) behind a **separate service + controller** (`HealthProfileService` / `HealthProfileController`) gated to **admin/pharmacist only** — a cashier/accountant/auditor/inventory_manager hitting those routes gets a **403 at the guard**, not a field-redacted response. The default `GET /customers/:id` **never** includes health data (it only returns a `hasHealthProfile` boolean so the UI knows whether to offer the gated tab). Every health-profile **access** (not just change) is audit-logged (`HEALTH_PROFILE_VIEWED`). Do not add health fields to the general customer response or relax these role sets without understanding this.
+
+Migration `20260708000000_customers_module` **supersedes the Module 4 `Customer` stub** (`phone` now required + unique; adds DOB/address/emergency-contact/consent/`isMergedInto`/`createdBy`) and adds `CustomerHealthProfile` (1:1), `PrescriptionRecord`, `CustomerTag`(+`Assignment`), `CustomerNote`. **`Sale.customerId` is now a real FK** to `Customer`.
+
+- **Quick-add** (`POST /customers/quick-add`, cashier/admin/pharmacist) — name + phone, single-table insert for the POS. Exact-phone duplicate returns **409 `CUSTOMER_PHONE_EXISTS`** with a "search instead" message (no checkout friction). **Full create/edit** (admin/pharmacist) adds the richer profile.
+- **`cashier` search** (`GET /customers/search`) is a genuinely **narrow, separate response shape** — `{ id, name, phone, hasPrescriptionOnFile }` only, never spend/health. Cashiers cannot hit `GET /customers` (403); they reach customers only via the POS selector.
+- **Lifetime spend** is included only for admin/accountant/auditor (not pharmacist), computed live from Module 4 sales. Purchase history + medication summary are always **live from `Sale`** (never duplicated).
+- **Merge** (`POST /customers/merge`, admin/pharmacist) is transactional: reassigns `Sale.customerId` (a documented cross-module write for identity merge), consolidates prescriptions/notes/tags (de-duped) + health profile, and marks the loser `isMergedInto` (irreversible). Re-merging a merged record → 400.
+- Consent flags (`consentHealthDataStorage`, `consentMarketingContact`) are **tracking-only** in this version (not yet enforcement).
+
+`CustomerSelector` / search built in Module 8, **reused by Module 4's POS** (repointed to `/customers/search` + `/customers/quick-add`). Frontend: `frontend/src/pages/Customers/*` (list w/ tags + gated spend, tabbed detail where the **🔒 Health Info tab is absent — not disabled — for unauthorised roles and never fetches**, sectioned create/edit form, side-by-side Merge tool).
 
 ## Role-permission matrix
 

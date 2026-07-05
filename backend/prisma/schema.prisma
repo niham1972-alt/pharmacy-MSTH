@@ -105,6 +105,7 @@ model Sale {
   idempotencyKey   String?
   createdAt        DateTime               @default(now())
   cashierSession   CashierSession         @relation(fields: [cashierSessionId], references: [id])
+  customer         Customer?              @relation(fields: [customerId], references: [id])
   items            SaleItem[]
   payments         SalePayment[]
   complianceRecords SaleComplianceRecord[]
@@ -196,22 +197,103 @@ model ParkedSale {
 }
 
 // ---------------------------------------------------------------------------
-// Module 8 (Customers/Patients) — STUB. Minimal shape so POS can associate a
-// sale with a customer today; the authoritative profile (address, loyalty,
-// prescription records) is finalized in Module 8. `Sale.customerId` is a loose
-// reference (no enforced relation until Module 8 lands).
+// Module 8: Customers / Patients — AUTHORITATIVE (supersedes the Module 4 stub).
+// Handles personal + health-adjacent data → elevated privacy posture. Health
+// data lives in a separate table (CustomerHealthProfile) so access can be gated
+// architecturally, not by field redaction. `Sale.customerId` is now a real FK.
 // ---------------------------------------------------------------------------
 model Customer {
-  id         String   @id @default(uuid())
+  id                    String                  @id @default(uuid())
+  pharmacyId            String
+  name                  String
+  phone                 String
+  email                 String?
+  dateOfBirth           DateTime?
+  gender                String?
+  nationalIdOrPatientId String?
+  addressLine1          String?
+  addressLine2          String?
+  city                  String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  isActive              Boolean                 @default(true)
+  isMergedInto          String? // if set, merged away → points to surviving Customer.id
+  consentHealthDataStorage Boolean              @default(false)
+  consentMarketingContact  Boolean              @default(false)
+  createdBy             String
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  healthProfile CustomerHealthProfile?
+  prescriptions PrescriptionRecord[]
+  tags          CustomerTagAssignment[]
+  notes         CustomerNote[]
+  sales         Sale[]
+
+  @@unique([pharmacyId, phone])
+  @@index([pharmacyId, isActive])
+  @@index([pharmacyId, name])
+}
+
+model CustomerHealthProfile {
+  id                        String   @id @default(uuid())
+  customerId                String   @unique
+  allergiesFreeText         String?
+  allergyTags               String[]
+  chronicConditionsFreeText String?
+  chronicConditionTags      String[]
+  updatedBy                 String
+  updatedAt                 DateTime @updatedAt
+  customer                  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model PrescriptionRecord {
+  id                String    @id @default(uuid())
+  pharmacyId        String
+  customerId        String
+  fileUrl           String?
+  referenceNumber   String?
+  prescribingDoctor String?
+  issuedDate        DateTime?
+  linkedSaleIds     String[]
+  uploadedBy        String
+  uploadedAt        DateTime  @default(now())
+  notes             String?
+  customer          Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([pharmacyId, customerId])
+}
+
+model CustomerTag {
+  id         String @id @default(uuid())
   pharmacyId String
   name       String
-  phone      String?
-  email      String?
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  color      String?
 
-  @@index([pharmacyId, name])
-  @@index([pharmacyId, phone])
+  @@unique([pharmacyId, name])
+}
+
+model CustomerTagAssignment {
+  id         String   @id @default(uuid())
+  customerId String
+  tagId      String
+  assignedBy String
+  assignedAt DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, tagId])
+  @@index([tagId])
+}
+
+model CustomerNote {
+  id         String   @id @default(uuid())
+  customerId String
+  note       String
+  createdBy  String
+  createdAt  DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
 }
 
 // ---------------------------------------------------------------------------

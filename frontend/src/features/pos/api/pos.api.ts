@@ -55,11 +55,14 @@ export interface Customer {
   id: string;
   name: string;
   phone: string | null;
+  hasPrescriptionOnFile?: boolean;
 }
 
+// Module 8 owns customers. POS uses the narrow typeahead (no health/financial
+// data) + the fast quick-add (name + phone, required).
 export const customersApi = {
-  search: (term: string) => apiClient.get<Customer[]>(`/customers${term ? `?search=${encodeURIComponent(term)}` : ''}`),
-  create: (name: string, phone?: string) => apiClient.post<Customer>('/customers', { name, phone }),
+  search: (term: string) => apiClient.get<Customer[]>(`/customers/search${term ? `?q=${encodeURIComponent(term)}` : ''}`),
+  create: (name: string, phone: string) => apiClient.post<Customer>('/customers/quick-add', { name, phone }),
 };
 
 export const salesApi = {
