@@ -196,6 +196,25 @@ model ParkedSale {
 }
 
 // ---------------------------------------------------------------------------
+// Module 8 (Customers/Patients) — STUB. Minimal shape so POS can associate a
+// sale with a customer today; the authoritative profile (address, loyalty,
+// prescription records) is finalized in Module 8. `Sale.customerId` is a loose
+// reference (no enforced relation until Module 8 lands).
+// ---------------------------------------------------------------------------
+model Customer {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  name       String
+  phone      String?
+  email      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@index([pharmacyId, name])
+  @@index([pharmacyId, phone])
+}
+
+// ---------------------------------------------------------------------------
 // Module 2: Medicines / Products — AUTHORITATIVE (supersedes the Module 1 stub).
 // Master catalog referenced by Purchases, Sales/POS, Inventory, Batch & Expiry,
 // Barcode and Reports via `medicineId`.

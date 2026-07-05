@@ -27,12 +27,39 @@ export interface FinalizePayload {
   compliance?: Array<{ medicineId: string; type: string; prescribingDoctor?: string; patientName?: string; quantityDispensed: number }>;
 }
 
+export interface PriceCheckLine {
+  medicineId: string;
+  name: string;
+  unitPrice: number;
+  currentStock: number;
+  stockOk: boolean;
+  prescriptionRequired: boolean;
+  controlled: boolean;
+  discontinued: boolean;
+  fefoBatch: { batchNumber: string; expiryDate: string } | null;
+}
+
 export const posApi = {
   currentSession: () => apiClient.get<SessionData | null>('/sales/sessions/current'),
   openSession: (openingFloat: number) => apiClient.post<SessionData>('/sales/sessions', { openingFloat }),
   closeSession: (id: string, actualCash: number) => apiClient.post<SessionData>(`/sales/sessions/${id}/close`, { actualCash }),
   finalize: (payload: FinalizePayload) => apiClient.post<{ id: string; saleNumber: string }>('/sales', payload),
   discountApproval: (approverEmail: string, approverPassword: string) => apiClient.post<{ approverId: string; role: string }>('/sales/discount-approval', { approverEmail, approverPassword }),
+  priceCheck: (items: Array<{ medicineId: string; quantity: number }>) => apiClient.post<{ lines: PriceCheckLine[]; totals: { grandTotal: number } }>('/sales/cart/price-check', { items }),
+  park: (label: string | undefined, cartSnapshot: unknown) => apiClient.post<{ id: string }>('/sales/parked', { label, cartSnapshot }),
+  listParked: () => apiClient.get<Array<{ id: string; label: string | null; cartSnapshot: unknown; createdAt: string }>>('/sales/parked'),
+  discardParked: (id: string) => apiClient.delete(`/sales/parked/${id}`),
+};
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string | null;
+}
+
+export const customersApi = {
+  search: (term: string) => apiClient.get<Customer[]>(`/customers${term ? `?search=${encodeURIComponent(term)}` : ''}`),
+  create: (name: string, phone?: string) => apiClient.post<Customer>('/customers', { name, phone }),
 };
 
 export const salesApi = {

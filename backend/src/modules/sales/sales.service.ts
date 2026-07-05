@@ -41,13 +41,24 @@ export class SalesService {
   // Price check (advisory pre-flight)
   // -------------------------------------------------------------------------
   async priceCheck(user: AuthenticatedUser, dto: PriceCheckDto) {
-    const meds = await this.loadMedicines(user.pharmacyId, dto.items.map((i) => i.medicineId));
+    const branchId = this.branch(user, dto.branchId);
+    const medIds = dto.items.map((i) => i.medicineId);
+    const meds = await this.loadMedicines(user.pharmacyId, medIds);
+    // FEFO preview: the soonest-expiry in-stock batch that would be drawn (Module 6 seam).
+    const batches = await this.prisma.medicineBatch.findMany({
+      where: { pharmacyId: user.pharmacyId, branchId, medicineId: { in: medIds }, quantity: { gt: 0 } },
+      orderBy: { expiryDate: 'asc' },
+      select: { medicineId: true, batchNumber: true, expiryDate: true },
+    });
+    const fefoBatch = new Map<string, { batchNumber: string; expiryDate: string }>();
+    for (const b of batches) if (!fefoBatch.has(b.medicineId)) fefoBatch.set(b.medicineId, { batchNumber: b.batchNumber, expiryDate: b.expiryDate.toISOString() });
+
     const lines = dto.items.map((it) => {
       const m = meds.get(it.medicineId)!;
       const unitPrice = this.resolvePrice(user, it, m);
       const line: LineInput = { unitPrice, quantity: it.quantity, discountAmount: it.discountAmount ?? 0, taxRatePercent: dec(m.taxRatePercent), taxInclusive: m.taxInclusive, unitCost: dec(m.costPrice) };
       const stockOk = ALLOW_NEGATIVE_STOCK || m.currentStock >= it.quantity;
-      return { medicineId: it.medicineId, name: m.brandName ?? m.genericName, unitPrice, currentStock: m.currentStock, stockOk, prescriptionRequired: m.prescriptionRequired, controlled: !!m.controlledSubstanceSchedule, discontinued: m.status === 'DISCONTINUED', line };
+      return { medicineId: it.medicineId, name: m.brandName ?? m.genericName, unitPrice, currentStock: m.currentStock, stockOk, prescriptionRequired: m.prescriptionRequired, controlled: !!m.controlledSubstanceSchedule, discontinued: m.status === 'DISCONTINUED', fefoBatch: fefoBatch.get(it.medicineId) ?? null, line };
     });
     const { totals } = computeCart(lines.map((l) => l.line));
     return { lines: lines.map(({ line, ...rest }) => ({ ...rest, ...line })), totals };

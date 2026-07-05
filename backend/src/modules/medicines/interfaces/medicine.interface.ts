@@ -17,7 +17,6 @@ export interface MedicineSearchResult {
   imageUrl: string | null;
   currentStock: number;
   stockStatus: 'in_stock' | 'low' | 'out';
-  taxRatePercent: number;
   taxInclusive: boolean;
   prescriptionRequired: boolean;
   controlled: boolean;

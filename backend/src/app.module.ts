@@ -10,6 +10,7 @@ import { MedicinesModule } from './modules/medicines/medicines.module';
 import { MedicineLookupsModule } from './modules/medicine-lookups/medicine-lookups.module';
 import { PurchasesModule } from './modules/purchases/purchases.module';
 import { SalesModule } from './modules/sales/sales.module';
+import { CustomersModule } from './modules/customers/customers.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -29,6 +30,7 @@ import { HealthController } from './health/health.controller';
     MedicineLookupsModule,
     PurchasesModule,
     SalesModule,
+    CustomersModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

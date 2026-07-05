@@ -80,7 +80,6 @@ export class MedicinesService {
         imageUrl: m.imageUrl,
         currentStock: m.currentStock,
         stockStatus: this.stockStatusOf(m.currentStock, m.reorderLevel),
-        taxRatePercent: dec(m.taxRatePercent),
         taxInclusive: m.taxInclusive,
         prescriptionRequired: m.prescriptionRequired,
         controlled: !!m.controlledSubstanceSchedule,

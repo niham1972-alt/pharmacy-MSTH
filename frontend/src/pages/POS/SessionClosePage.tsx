@@ -42,9 +42,15 @@ export function SessionClosePage() {
       <h1 className="mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">Close Session</h1>
       <div className="mb-3 space-y-1 text-sm">
         <div className="flex justify-between"><span className="text-gray-500">Opening float</span><span>{formatCurrency(session.openingFloat)}</span></div>
+        <div className="flex justify-between"><span className="text-gray-500">Transactions</span><span>{session.salesCount} · {formatCurrency(session.salesTotal)}</span></div>
+        <div className="my-1 border-t border-dashed border-gray-200 dark:border-gray-700" />
+        {session.byMethod.map((m) => (
+          <div key={m.method} className="flex justify-between text-gray-500"><span>{m.method}</span><span>{formatCurrency(m.amount)}</span></div>
+        ))}
+        {session.byMethod.length === 0 && <div className="text-gray-400">No sales this session.</div>}
+        <div className="my-1 border-t border-dashed border-gray-200 dark:border-gray-700" />
         <div className="flex justify-between"><span className="text-gray-500">Cash sales</span><span>{formatCurrency(session.cashCollected)}</span></div>
         <div className="flex justify-between font-medium"><span>Expected in drawer</span><span>{formatCurrency(expectedCash)}</span></div>
-        <div className="flex justify-between text-gray-500"><span>Total sales</span><span>{session.salesCount} · {formatCurrency(session.salesTotal)}</span></div>
       </div>
       <label className="mb-3 block"><span className="text-xs text-gray-500">Counted cash</span>
         <input type="number" min="0" value={actualCash} onChange={(e) => setActualCash(e.target.value)} placeholder={String(expectedCash)} className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm" />

@@ -11,6 +11,20 @@
   .print-grid {
     display: block !important;
   }
+  /* When a receipt is on screen, print only it. */
+  body:has(#receipt) > * {
+    visibility: hidden;
+  }
+  #receipt,
+  #receipt * {
+    visibility: visible;
+  }
+  #receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
 }
 
 @keyframes pulse-highlight {
