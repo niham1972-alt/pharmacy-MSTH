@@ -76,6 +76,8 @@ async function main() {
   await prisma.inventory.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.stockTransfer.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.stockReconciliation.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.batchWriteOff.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.batchRecall.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.medicineBatch.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.medicine.deleteMany({ where: { pharmacyId: PHARMACY_ID } }); // cascades barcodes/priceHistory/conversions
   await prisma.category.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
@@ -170,22 +172,68 @@ async function main() {
   }
   console.log('  inventory rows + opening ledger:', meds.length);
 
-  // --- Batches (expiry alerts) ---------------------------------------------
-  const batchPlan = [[0, 12], [1, 22], [3, 8], [4, 55], [5, 78], [8, 40], [9, 120], [10, 150], [11, 400], [0, 500]];
-  for (let i = 0; i < batchPlan.length; i++) {
-    const [medIdx, days] = batchPlan[i];
-    await prisma.medicineBatch.create({
-      data: {
-        pharmacyId: PHARMACY_ID,
-        branchId: BRANCH_ID,
-        medicineId: meds[medIdx].id,
-        batchNumber: `B-2026${String(i + 1).padStart(3, '0')}`,
-        quantity: randInt(20, 200),
-        expiryDate: daysAhead(days),
-      },
-    });
+  // --- Batches (Module 6, authoritative) -----------------------------------
+  // Every stocked medicine gets one or more batches whose currentQuantity sums
+  // EXACTLY to its opening aggregate stock, so FEFO has real backing. A few are
+  // seeded to demo the tiered expiry scheme + one EXPIRED + one RECALLED batch
+  // (both must be provably unsellable at POS).
+  const statusFor = (days, recalled, qty) => {
+    if (recalled) return 'RECALLED';
+    if (qty <= 0) return 'DEPLETED';
+    if (days <= 0) return 'EXPIRED';
+    if (days <= 180) return 'EXPIRING_SOON';
+    return 'FRESH';
+  };
+  // Per-med split plan: [{ frac, days, recalled?, expired? }]. Default = one fresh batch.
+  const batchSpecFor = (idx) => {
+    switch (idx) {
+      case 0: return [{ frac: 0.4, days: 40 }, { frac: 0.6, days: 420 }]; // multi-batch FEFO (soonest first)
+      case 1: return [{ frac: 1, days: 20 }]; // EXPIRING_SOON — red (<30d)
+      case 2: return [{ frac: 1, days: 70 }]; // EXPIRING_SOON — orange (30–90d)
+      case 3: return [{ frac: 0.85, days: 300 }, { frac: 0.15, days: -6 }]; // partial EXPIRED (unsellable slice)
+      case 5: return [{ frac: 1, days: 210, recalled: true }]; // fully RECALLED — POS hard-block demo
+      case 6: return [{ frac: 1, days: 130 }]; // EXPIRING_SOON — yellow (90–180d)
+      default: return [{ frac: 1, days: 220 + ((idx * 37) % 500) }]; // FRESH
+    }
+  };
+  let batchCount = 0;
+  for (let idx = 0; idx < meds.length; idx++) {
+    const m = meds[idx];
+    if (m.stock <= 0) continue; // out-of-stock demo meds carry no batch
+    const spec = batchSpecFor(idx);
+    // Distribute stock across the spec, giving the remainder to the last slice.
+    let allocated = 0;
+    for (let j = 0; j < spec.length; j++) {
+      const s = spec[j];
+      const qty = j === spec.length - 1 ? m.stock - allocated : Math.max(1, Math.round(m.stock * s.frac));
+      allocated += qty;
+      await prisma.medicineBatch.create({
+        data: {
+          pharmacyId: PHARMACY_ID,
+          branchId: BRANCH_ID,
+          medicineId: m.id,
+          batchNumber: `B-2026-${String(idx + 1).padStart(2, '0')}${String.fromCharCode(65 + j)}`,
+          expiryDate: daysAhead(s.days),
+          receivedQuantity: qty,
+          currentQuantity: qty,
+          unitCostAtReceipt: m.cost,
+          status: statusFor(s.days, s.recalled, qty),
+          isRecalled: !!s.recalled,
+        },
+      });
+      batchCount += 1;
+    }
+    // Recall record for the recalled batch (compliance trail).
+    if (spec.some((s) => s.recalled)) {
+      const rb = await prisma.medicineBatch.findFirst({ where: { medicineId: m.id, isRecalled: true } });
+      if (rb) {
+        await prisma.batchRecall.create({
+          data: { pharmacyId: PHARMACY_ID, batchId: rb.id, reason: 'Manufacturer recall notice — contamination risk in this lot.', sourceReference: 'MFR-RECALL-2026-014', flaggedBy: ADMIN_ID, resolutionStatus: 'QUARANTINED' },
+        });
+      }
+    }
   }
-  console.log('  batches:', batchPlan.length);
+  console.log('  batches:', batchCount);
 
   // --- Cashier session (historical, CLOSED) + Sales over last 30 days ------
   const session = await prisma.cashierSession.create({

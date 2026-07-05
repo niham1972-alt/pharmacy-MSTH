@@ -113,7 +113,7 @@ export class DashboardRepository {
     const now = new Date();
     const threshold = new Date(now.getTime() + thresholdDays * 24 * 60 * 60 * 1000);
     return this.prisma.medicineBatch.count({
-      where: { pharmacyId, branchId, expiryDate: { gte: now, lte: threshold }, quantity: { gt: 0 } },
+      where: { pharmacyId, branchId, expiryDate: { gte: now, lte: threshold }, currentQuantity: { gt: 0 }, isRecalled: false },
     });
   }
 
@@ -226,11 +226,11 @@ export class DashboardRepository {
     pharmacyId: string,
     branchId: string,
     thresholdDays: number,
-  ): Promise<Array<{ id: string; medicineId: string; batchNumber: string; expiryDate: Date; quantity: number }>> {
+  ): Promise<Array<{ id: string; medicineId: string; batchNumber: string; expiryDate: Date; currentQuantity: number }>> {
     const now = new Date();
     const threshold = new Date(now.getTime() + thresholdDays * 24 * 60 * 60 * 1000);
     return this.prisma.medicineBatch.findMany({
-      where: { pharmacyId, branchId, expiryDate: { gte: now, lte: threshold }, quantity: { gt: 0 } },
+      where: { pharmacyId, branchId, expiryDate: { gte: now, lte: threshold }, currentQuantity: { gt: 0 }, isRecalled: false },
       orderBy: { expiryDate: 'asc' },
     });
   }

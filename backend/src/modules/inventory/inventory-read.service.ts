@@ -71,7 +71,7 @@ export class InventoryReadService {
     const scope = this.branch(user, branchId);
     const m = await this.prisma.medicine.findFirst({ where: { id: medicineId, pharmacyId: user.pharmacyId }, include: { category: { select: { name: true } } } });
     if (!m) throw new NotFoundException({ errorCode: 'MEDICINE_NOT_FOUND', message: 'Medicine not found' });
-    const batches = await this.prisma.medicineBatch.findMany({ where: { pharmacyId: user.pharmacyId, branchId: scope, medicineId, quantity: { gt: 0 } }, orderBy: { expiryDate: 'asc' } });
+    const batches = await this.prisma.medicineBatch.findMany({ where: { pharmacyId: user.pharmacyId, branchId: scope, medicineId, currentQuantity: { gt: 0 } }, orderBy: { expiryDate: 'asc' } });
 
     const base: Record<string, unknown> = {
       medicineId: m.id,
@@ -82,7 +82,7 @@ export class InventoryReadService {
       reorderLevel: m.reorderLevel,
       reorderQuantity: m.reorderQuantity,
       stockStatus: m.currentStock <= 0 ? 'out' : m.currentStock <= m.reorderLevel ? 'low' : 'in_stock',
-      batches: batches.map((b) => ({ id: b.id, batchNumber: b.batchNumber, quantity: b.quantity, expiryDate: b.expiryDate.toISOString() })),
+      batches: batches.map((b) => ({ id: b.id, batchNumber: b.batchNumber, quantity: b.currentQuantity, expiryDate: b.expiryDate.toISOString(), status: b.status, isRecalled: b.isRecalled })),
     };
     if (canSeeCost(user.role)) {
       base.unitCost = dec(m.costPrice);

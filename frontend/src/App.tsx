@@ -21,6 +21,11 @@ import { InventoryListPage } from './pages/Inventory/InventoryListPage';
 import { InventoryDetailPage } from './pages/Inventory/InventoryDetailPage';
 import { ReorderSuggestionsPage } from './pages/Inventory/ReorderSuggestionsPage';
 import { ReconciliationPage } from './pages/Inventory/ReconciliationPage';
+import { BatchesListPage } from './pages/Batches/BatchesListPage';
+import { BatchDetailPage } from './pages/Batches/BatchDetailPage';
+import { ExpiringStockPage } from './pages/Batches/ExpiringStockPage';
+import { ExpiredStockReviewPage } from './pages/Batches/ExpiredStockReviewPage';
+import { RecallsPage } from './pages/Batches/RecallsPage';
 
 function ProtectedLayout() {
   return (
@@ -58,6 +63,13 @@ function InventoryGate() {
   return <Outlet />;
 }
 
+/** Batches: cashier has no direct access (spec §13); accountant only via reports. */
+function BatchesGate() {
+  const { user } = useAuth();
+  if (['cashier', 'accountant'].includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -89,6 +101,13 @@ export default function App() {
           <Route path="/inventory/reorder" element={<ReorderSuggestionsPage />} />
           <Route path="/inventory/reconciliation" element={<ReconciliationPage />} />
           <Route path="/inventory/:medicineId" element={<InventoryDetailPage />} />
+        </Route>
+        <Route element={<BatchesGate />}>
+          <Route path="/batches" element={<BatchesListPage />} />
+          <Route path="/batches/expiring" element={<ExpiringStockPage />} />
+          <Route path="/batches/expired" element={<ExpiredStockReviewPage />} />
+          <Route path="/batches/recalls" element={<RecallsPage />} />
+          <Route path="/batches/:id" element={<BatchDetailPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

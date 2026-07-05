@@ -506,17 +506,91 @@ model PriceHistory {
   @@index([medicineId, effectiveAt])
 }
 
-/// STUB — see Module 6 (Batch & Expiry)
-model MedicineBatch {
-  id          String   @id @default(uuid())
-  medicineId  String
-  batchNumber String
-  quantity    Int
-  expiryDate  DateTime
-  pharmacyId  String
-  branchId    String
+// ---------------------------------------------------------------------------
+// Module 6: Batch & Expiry Management — AUTHORITATIVE (supersedes Module 1 stub).
+// Owns batch identity + expiry logic + FEFO. `currentQuantity` is a synchronized
+// read-model of Module 5's ledger for this batch (kept consistent in the same
+// transaction as every InventoryService call this module initiates).
+// ---------------------------------------------------------------------------
+enum BatchStatus {
+  FRESH
+  EXPIRING_SOON
+  EXPIRED
+  DEPLETED
+  RECALLED
+}
 
-  @@index([pharmacyId, branchId, expiryDate])
+enum RecallResolutionStatus {
+  QUARANTINED
+  RETURNED_TO_SUPPLIER
+  DESTROYED
+  RESOLVED_OTHER
+}
+
+model MedicineBatch {
+  id                   String      @id @default(uuid())
+  pharmacyId           String
+  branchId             String
+  medicineId           String
+  batchNumber          String
+  manufactureDate      DateTime?
+  expiryDate           DateTime
+  receivedQuantity     Int // original quantity received, immutable historical record
+  currentQuantity      Int // live sellable quantity, synced with Module 5's ledger
+  unitCostAtReceipt    Decimal     @db.Decimal(12, 2)
+  status               BatchStatus @default(FRESH)
+  isRecalled           Boolean     @default(false)
+  expiryOverridden     Boolean     @default(false)
+  expiryOverrideReason String?
+  sourceGrnId          String? // loose ref to Module 3's GoodsReceipt
+  sourceGrnItemId      String?
+  createdAt            DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  writeOffs     BatchWriteOff[]
+  recallRecords BatchRecall[]
+
+  @@unique([pharmacyId, branchId, medicineId, batchNumber])
+  @@index([pharmacyId, branchId, medicineId, expiryDate])
+  @@index([pharmacyId, branchId, status])
+  @@index([expiryDate])
+}
+
+model BatchWriteOff {
+  id                 String   @id @default(uuid())
+  pharmacyId         String
+  branchId           String
+  batchId            String
+  quantityWrittenOff Int
+  disposalMethod     String // RETURNED_TO_SUPPLIER | DESTROYED_ONSITE | THIRD_PARTY_DISPOSAL | OTHER
+  disposalReference  String?
+  writtenOffBy       String
+  writtenOffAt       DateTime @default(now())
+  notes              String?
+
+  batch MedicineBatch @relation(fields: [batchId], references: [id])
+
+  @@index([pharmacyId, branchId])
+  @@index([batchId])
+}
+
+model BatchRecall {
+  id               String                 @id @default(uuid())
+  pharmacyId       String
+  batchId          String
+  reason           String
+  sourceReference  String?
+  flaggedBy        String
+  flaggedAt        DateTime               @default(now())
+  resolutionStatus RecallResolutionStatus @default(QUARANTINED)
+  resolvedAt       DateTime?
+  resolvedBy       String?
+  notes            String?
+
+  batch MedicineBatch @relation(fields: [batchId], references: [id])
+
+  @@index([pharmacyId])
+  @@index([batchId])
 }
 
 // ---------------------------------------------------------------------------

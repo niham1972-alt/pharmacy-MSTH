@@ -5,8 +5,7 @@ import { AuditLogService } from '../../common/audit/audit-log.interface';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { SalesRepository } from './sales.repository';
 import { SalesEventsEmitter } from './events/sales-events.emitter';
-import { BatchFefoService } from './integrations/batch-fefo.service';
-import { InventoryService } from '../inventory/inventory.service';
+import { BatchesService } from '../batches/batches.service';
 import { computeCart, LineInput } from './cart-calculations.util';
 import { FinalizeSaleDto, ParkSaleDto, PriceCheckDto, VoidSaleDto } from './dto/sales.dto';
 
@@ -27,8 +26,7 @@ export class SalesService {
     private readonly repo: SalesRepository,
     private readonly audit: AuditLogService,
     private readonly events: SalesEventsEmitter,
-    private readonly fefo: BatchFefoService,
-    private readonly inventory: InventoryService,
+    private readonly batches: BatchesService,
   ) {}
 
   private branch(user: AuthenticatedUser, requested?: string): string {
@@ -44,14 +42,9 @@ export class SalesService {
     const branchId = this.branch(user, dto.branchId);
     const medIds = dto.items.map((i) => i.medicineId);
     const meds = await this.loadMedicines(user.pharmacyId, medIds);
-    // FEFO preview: the soonest-expiry in-stock batch that would be drawn (Module 6 seam).
-    const batches = await this.prisma.medicineBatch.findMany({
-      where: { pharmacyId: user.pharmacyId, branchId, medicineId: { in: medIds }, quantity: { gt: 0 } },
-      orderBy: { expiryDate: 'asc' },
-      select: { medicineId: true, batchNumber: true, expiryDate: true },
-    });
-    const fefoBatch = new Map<string, { batchNumber: string; expiryDate: string }>();
-    for (const b of batches) if (!fefoBatch.has(b.medicineId)) fefoBatch.set(b.medicineId, { batchNumber: b.batchNumber, expiryDate: b.expiryDate.toISOString() });
+    // FEFO preview via Module 6 — the soonest *sellable* batch (excludes expired
+    // and recalled) that a sale would draw from.
+    const fefoBatch = await this.batches.previewFefoBatches(user.pharmacyId, branchId, medIds);
 
     const lines = dto.items.map((it) => {
       const m = meds.get(it.medicineId)!;
@@ -147,21 +140,20 @@ export class SalesService {
         },
       });
 
-      // Per line: FEFO allocation → stock decrement → SaleItem (with batchId).
+      // Per line: Module 6 FEFO allocation + Module 5 stock OUT (one call, one
+      // transaction) → SaleItem (with the drawn batchId). Expired/recalled
+      // batches are hard-excluded here — even a manual override can't pick one.
       for (let i = 0; i < dto.items.length; i++) {
         const it = dto.items[i];
-        const alloc = await this.fefo.allocate(tx, { pharmacyId: user.pharmacyId, branchId, medicineId: it.medicineId, quantity: it.quantity, manualBatchId: it.batchId });
-        // Stock owned by Module 5 — record OUT through its ledger contract,
-        // enrolled in this sale's transaction (all-or-nothing).
-        await this.inventory.recordStockOut(
-          { pharmacyId: user.pharmacyId, branchId, medicineId: it.medicineId, batchId: alloc[0]?.batchId ?? it.batchId ?? null, quantity: it.quantity, unitCost: lineInputs[i].unitCost, reasonCode: 'SALE', referenceModule: 'SALE', referenceId: created.id, performedBy: user.userId },
+        const alloc = await this.batches.allocateAndConsume(
+          { pharmacyId: user.pharmacyId, branchId, medicineId: it.medicineId, requiredQuantity: it.quantity, referenceModule: 'SALE', referenceId: created.id, performedBy: user.userId, manualBatchId: it.batchId, unitCost: lineInputs[i].unitCost },
           tx,
         );
         const saleItem = await tx.saleItem.create({
           data: {
             saleId: created.id,
             medicineId: it.medicineId,
-            batchId: alloc[0]?.batchId ?? it.batchId ?? null,
+            batchId: alloc[0]?.batchId ?? null,
             quantity: it.quantity,
             unitPrice: lineInputs[i].unitPrice,
             unitCost: lineInputs[i].unitCost ?? 0,
@@ -233,14 +225,12 @@ export class SalesService {
     if (ageDays > VOID_WINDOW_DAYS) throw new BadRequestException({ errorCode: 'VOID_WINDOW_EXPIRED', message: 'Past the void window — process this as a return (Module 10).' });
 
     await this.prisma.$transaction(async (tx) => {
-      for (const item of sale.items) {
-        // Reverse the sale via an offsetting ledger IN (original OUT preserved).
-        await this.inventory.recordStockIn(
-          { pharmacyId: sale.pharmacyId, branchId: sale.branchId, medicineId: item.medicineId, batchId: item.batchId, quantity: item.quantity, reasonCode: 'POSITIVE_ADJUSTMENT', referenceModule: 'SALE', referenceId: id, performedBy: user.userId, notes: 'Sale void reversal' },
-          tx,
-        );
-        if (item.batchId) await this.fefo.reverse(tx, item.batchId, item.quantity);
-      }
+      // Module 6 restores each batch's quantity + records the offsetting Module 5
+      // ledger IN (original OUT preserved), all in this transaction.
+      await this.batches.reverseConsumption(
+        { pharmacyId: sale.pharmacyId, branchId: sale.branchId, items: sale.items.map((item) => ({ medicineId: item.medicineId, batchId: item.batchId, quantity: item.quantity })), referenceModule: 'SALE', referenceId: id, performedBy: user.userId, notes: 'Sale void reversal' },
+        tx,
+      );
       await tx.saleComplianceRecord.updateMany({ where: { saleId: id }, data: { isVoided: true } });
       await tx.sale.update({ where: { id }, data: { status: 'VOIDED', voidedBy: user.userId, voidedAt: new Date(), voidReason: dto.reason } });
     });

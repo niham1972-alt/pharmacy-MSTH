@@ -1,4 +1,4 @@
-# Pharmacy Management System — Modules 1–5 (Dashboard · Medicines · Purchases · Sales/POS · Inventory)
+# Pharmacy Management System — Modules 1–6 (Dashboard · Medicines · Purchases · Sales/POS · Inventory · Batch & Expiry)
 
 Enterprise Pharmacy Management Software, built module by module. This is **Module 1: Dashboard** — the role-aware operational landing screen. 17 other modules (Medicines, Sales/POS, Inventory, Batch & Expiry, Suppliers, Customers, Returns, Stock Adjustment, Barcode, Expenses, Reports, Audit Logs, Users & Roles, Backup & Restore, Settings, Purchases, ...) do not exist yet — the Dashboard depends on clearly-marked **stub** Prisma models for them (see `backend/prisma/schema.prisma`) that later modules will supersede.
 
@@ -194,6 +194,26 @@ Each mutating method runs in a transaction, takes a `SELECT … FOR UPDATE` lock
 HTTP endpoints (base `/api/inventory`): `GET /` (list, cashier gets **no cost/valuation**), `/:medicineId` (+ batches), `/:medicineId/ledger` (movement history w/ clickable source links), `/summary`, `/reorder-suggestions`, `/valuation`, `POST/GET /reconciliation` (informational variance — never mutates stock; Module 11 actions it), `POST/GET /transfers` + `/:id/approve` + `/:id/receive` (stock moves only at receive, atomically OUT@source + IN@dest). Numbering `TRF-YYYY-NNNNNN` via advisory lock.
 
 Frontend: `frontend/src/pages/Inventory/*` (list w/ summary cards + status badges + valuation, detail with Overview/Batches/Movement-History tabs, reorder suggestions with a **Create-PO deep-link** that pre-fills Module 3's form, reconciliation with variance).
+
+## Module 6: Batch & Expiry Management
+
+The **authoritative owner of batch identity + expiry logic + FEFO**. Migration `20260706000000_batch_expiry_module` **supersedes the Module 1 `MedicineBatch` stub** (adds `receivedQuantity`/`currentQuantity`/`status`/`isRecalled`/expiry-override/`sourceGrn*`) and adds append-only `BatchWriteOff` + `BatchRecall` (with `BatchStatus`, `RecallResolutionStatus` enums). `currentQuantity` is a **synchronized read-model** of Module 5's ledger — every quantity change here calls `InventoryService` in the *same transaction*, so it never drifts.
+
+**`BatchesService` is the stable internal contract** (`@Global`) — Modules 3 (GRN) and 4 (sale/void) were rewired to call it, replacing their old `batch-sync`/`batch-fefo` seams (now deleted).
+
+```ts
+createOrAppendBatch(params, tx?)   // same medicine+batchNo+branch APPENDS; new number CREATES. Records stock IN (Module 5) internally.
+getFefoAllocation(params)           // non-mutating draw-plan preview
+allocateAndConsume(params, tx?)     // FEFO decision + Module 5 stock OUT in one tx — the sole sale-consumption path
+reverseConsumption(params, tx?)     // sale void: restore batch qty + offsetting ledger IN
+isBatchSellable({ batchId })        // THE single hard-block enforcement point
+```
+
+**Safety-critical invariant (verified live): expired and recalled batches are NEVER selectable for sale — not via automatic FEFO, not via manual override, not via a direct API call.** `allocateAndConsume` filters to `currentQuantity > 0 AND NOT isRecalled AND expiryDate > now`, ordered `expiryDate ASC, createdAt ASC` (deterministic FEFO). A manual `manualBatchId` pointing at an expired/recalled batch is rejected (`MANUAL_BATCH_NOT_SELLABLE`); an all-recalled/expired medicine fails cleanly with `INSUFFICIENT_SELLABLE_STOCK` (returns `available`), even when raw `Inventory.currentStock` shows enough total. A medicine that never had a batch falls back to a direct Module 5 stock-out (non-batch-tracked path). Status is tiered per Module 1's Dashboard colours (red <30d · orange 30–90d · yellow 90–180d), persisted for fast filtering and re-derived live on read.
+
+HTTP endpoints (base `/api/batches`): `GET /` (filter/sort/paginate), `/:id` (detail + linked GRN + traceability sales + write-off/recall history), `/expiring?thresholdDays=` (tiered), `/expired`, `POST /write-off` + `GET /write-offs` (permanent compliance record, reason EXPIRY_WRITE_OFF via Module 5), `POST /:id/recall` (idempotent) + `GET /recalls` + `POST /recalls/:id/resolve` + `/recalls/:id/affected-sales`. `cashier` has **no** direct access (indirect via POS only); write-off = admin/inventory_manager, recall = admin/pharmacist.
+
+Frontend: `frontend/src/pages/Batches/*` (list w/ status badges + day-tier chips, detail with traceability + Flag-Recall/Write-Off actions, tiered Expiring-Soon view, Expired-Stock multi-select write-off, Recalls with resolve + affected-sales). Shared `BatchStatusBadge`/`ExpiryChip` reuse Module 1's colour convention.
 
 ## Role-permission matrix
 

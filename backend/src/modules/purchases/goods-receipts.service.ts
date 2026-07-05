@@ -6,10 +6,9 @@ import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.in
 import { PurchasesRepository } from './purchases.repository';
 import { PurchaseConfigService } from './purchase-config.service';
 import { PurchaseEventsEmitter } from './events/purchase-events.emitter';
-import { BatchSyncService } from './integrations/batch-sync.service';
 import { MedicineCostSyncService } from './integrations/medicine-cost-sync.service';
-import { InventoryService } from '../inventory/inventory.service';
-import { CreateGrnDto, GrnItemDto } from './dto/create-grn.dto';
+import { BatchesService } from '../batches/batches.service';
+import { CreateGrnDto } from './dto/create-grn.dto';
 import { dec } from './purchase-orders.service';
 
 @Injectable()
@@ -19,8 +18,7 @@ export class GoodsReceiptsService {
     private readonly repo: PurchasesRepository,
     private readonly config: PurchaseConfigService,
     private readonly events: PurchaseEventsEmitter,
-    private readonly batchSync: BatchSyncService,
-    private readonly inventory: InventoryService,
+    private readonly batches: BatchesService,
     private readonly costSync: MedicineCostSyncService,
     private readonly audit: AuditLogService,
   ) {}
@@ -170,8 +168,9 @@ export class GoodsReceiptsService {
       };
       const grn = await tx.goodsReceipt.create({ data: grnData, include: { items: true } });
 
-      // 2-5. Per line: cost -> stock -> batch -> PO item received qty
-      for (const i of dto.items) {
+      // 2-5. Per line: cost -> batch (Module 6, which records stock IN via Module 5) -> PO item received qty
+      for (let idx = 0; idx < dto.items.length; idx++) {
+        const i = dto.items[idx];
         const totalUnits = i.receivedQuantity + (i.freeQuantity ?? 0);
         const med = await tx.medicine.findUnique({ where: { id: i.medicineId }, select: { currentStock: true, costPrice: true } });
         if (!med) throw new BadRequestException({ errorCode: 'INVALID_MEDICINE', message: `Medicine ${i.medicineId} not found.` });
@@ -187,18 +186,25 @@ export class GoodsReceiptsService {
           rule: cfg.costingRule,
           changedBy: user.userId,
         });
-        const batch = await this.batchSync.createBatch(tx, {
-          pharmacyId: user.pharmacyId,
-          branchId,
-          medicineId: i.medicineId,
-          batchNumber: i.batchNumber,
-          quantity: totalUnits,
-          expiryDate: new Date(i.expiryDate),
-        });
-        // Stock is now owned by Module 5 — record IN through its ledger contract
-        // (enrolled in this GRN transaction so it's all-or-nothing).
-        await this.inventory.recordStockIn(
-          { pharmacyId: user.pharmacyId, branchId, medicineId: i.medicineId, batchId: batch.id, quantity: totalUnits, unitCost: i.actualUnitCost, reasonCode: 'PURCHASE_RECEIPT', referenceModule: 'PURCHASE', referenceId: grn.id, performedBy: user.userId },
+        // Module 6 owns batch identity + records the stock IN through Module 5,
+        // all enrolled in this GRN transaction (all-or-nothing).
+        await this.batches.createOrAppendBatch(
+          {
+            pharmacyId: user.pharmacyId,
+            branchId,
+            medicineId: i.medicineId,
+            batchNumber: i.batchNumber,
+            expiryDate: new Date(i.expiryDate),
+            quantity: totalUnits,
+            unitCost: i.actualUnitCost,
+            expiryOverridden: i.expiryOverridden ?? false,
+            expiryOverrideReason: i.expiryOverrideReason,
+            sourceGrnId: grn.id,
+            sourceGrnItemId: grn.items[idx]?.id,
+            referenceModule: 'PURCHASE',
+            referenceId: grn.id,
+            performedBy: user.userId,
+          },
           tx,
         );
         if (!isDirect) {
