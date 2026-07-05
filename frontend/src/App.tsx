@@ -17,6 +17,10 @@ import { PosScreenPage } from './pages/POS/PosScreenPage';
 import { SessionClosePage } from './pages/POS/SessionClosePage';
 import { SalesHistoryListPage } from './pages/Sales/SalesHistoryListPage';
 import { SaleDetailPage } from './pages/Sales/SaleDetailPage';
+import { InventoryListPage } from './pages/Inventory/InventoryListPage';
+import { InventoryDetailPage } from './pages/Inventory/InventoryDetailPage';
+import { ReorderSuggestionsPage } from './pages/Inventory/ReorderSuggestionsPage';
+import { ReconciliationPage } from './pages/Inventory/ReconciliationPage';
 
 function ProtectedLayout() {
   return (
@@ -49,6 +53,11 @@ function SalesGate() {
   return <Outlet />;
 }
 
+/** Inventory: all roles may view (cashier gets a redacted, qty-only view). */
+function InventoryGate() {
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -74,6 +83,12 @@ export default function App() {
         <Route element={<SalesGate />}>
           <Route path="/sales" element={<SalesHistoryListPage />} />
           <Route path="/sales/:id" element={<SaleDetailPage />} />
+        </Route>
+        <Route element={<InventoryGate />}>
+          <Route path="/inventory" element={<InventoryListPage />} />
+          <Route path="/inventory/reorder" element={<ReorderSuggestionsPage />} />
+          <Route path="/inventory/reconciliation" element={<ReconciliationPage />} />
+          <Route path="/inventory/:medicineId" element={<InventoryDetailPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

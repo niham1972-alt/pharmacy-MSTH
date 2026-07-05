@@ -1,4 +1,4 @@
-# Pharmacy Management System — Modules 1–4 (Dashboard · Medicines · Purchases · Sales/POS)
+# Pharmacy Management System — Modules 1–5 (Dashboard · Medicines · Purchases · Sales/POS · Inventory)
 
 Enterprise Pharmacy Management Software, built module by module. This is **Module 1: Dashboard** — the role-aware operational landing screen. 17 other modules (Medicines, Sales/POS, Inventory, Batch & Expiry, Suppliers, Customers, Returns, Stock Adjustment, Barcode, Expenses, Reports, Audit Logs, Users & Roles, Backup & Restore, Settings, Purchases, ...) do not exist yet — the Dashboard depends on clearly-marked **stub** Prisma models for them (see `backend/prisma/schema.prisma`) that later modules will supersede.
 
@@ -174,6 +174,26 @@ Endpoints (base `/api/sales`):
 Server-side (never bypassable): payment sum must equal grand total exactly; prescription-required lines rejected without `prescriptionVerifiedBy` (`PRESCRIPTION_NOT_VERIFIED`); controlled substances rejected without a compliance record (`COMPLIANCE_RECORD_MISSING`); FEFO batch selection is automatic (manual override is elevated + audited); concurrent last-unit sales caught by row lock (`STOCK_CHANGED_SINCE_CHECK`); discounts above the auto-allowed % need elevated approval; void only within the configurable window. Env-configurable: `POS_AUTO_DISCOUNT_PCT`, `ALLOW_NEGATIVE_STOCK`, `POS_VOID_WINDOW_DAYS`, `SESSION_VARIANCE_THRESHOLD`. Cart math lives in `cart-calculations.util.ts`, mirrored byte-for-byte by the frontend's `cartCalculations.ts`.
 
 Frontend: `frontend/src/pages/POS/*` (session-gated POS screen — local-first Zustand cart, search-to-add, live totals, cash tender/change, prescription step-up verify, finalize + receipt; session close with variance) and `frontend/src/pages/Sales/*` (history list — cashier-scoped — + detail with void).
+
+## Module 5: Inventory / Stock Management
+
+The **authoritative owner of stock**. Migration `20260705000000_inventory_module` adds `Inventory` (materialized aggregate), the append-only `StockLedgerEntry`, `StockTransfer`(+items) and `StockReconciliation`. Also adds a `Customer` stub (Module 8) for POS association.
+
+**`InventoryService` is the stable internal contract** — the ONLY code permitted to mutate stock. Modules 3 (GRN) and 4 (sale/void) were rewired to call it instead of their own sync helpers. It's a `@Global` provider; inject it directly.
+
+```ts
+recordStockIn(params, tx?)   // + ledger IN, aggregate++, Medicine.currentStock mirror
+recordStockOut(params, tx?)  // INSUFFICIENT_STOCK unless allowNegativeStock
+getCurrentStock(params)
+checkSufficientStock(params)
+reverseStockMovement({ originalLedgerEntryId, ... }, tx?)  // offsetting entry, original untouched
+```
+
+Each mutating method runs in a transaction, takes a `SELECT … FOR UPDATE` lock on the medicine row (**do not remove — prevents concurrent decrements racing past zero**), writes an **immutable** ledger entry (`balanceAfter` snapshot for fast history), updates the `Inventory` aggregate, and mirrors the value into `Medicine.currentStock` so all existing reads keep working. Callers pass their own `tx` so stock changes are atomic with the GRN/sale. **Invariant, verified live: `Inventory.currentStock === SUM(ledger signed by direction)`.** Corrections never edit the ledger — they append an offsetting entry (used by sale void).
+
+HTTP endpoints (base `/api/inventory`): `GET /` (list, cashier gets **no cost/valuation**), `/:medicineId` (+ batches), `/:medicineId/ledger` (movement history w/ clickable source links), `/summary`, `/reorder-suggestions`, `/valuation`, `POST/GET /reconciliation` (informational variance — never mutates stock; Module 11 actions it), `POST/GET /transfers` + `/:id/approve` + `/:id/receive` (stock moves only at receive, atomically OUT@source + IN@dest). Numbering `TRF-YYYY-NNNNNN` via advisory lock.
+
+Frontend: `frontend/src/pages/Inventory/*` (list w/ summary cards + status badges + valuation, detail with Overview/Batches/Movement-History tabs, reorder suggestions with a **Create-PO deep-link** that pre-fills Module 3's form, reconciliation with variance).
 
 ## Role-permission matrix
 

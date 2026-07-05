@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiClientError } from '../../shared/api/client';
 import { formatCurrency } from '../../features/dashboard/utils/formatCurrency';
 import { purchasesApi } from '../../features/purchases/api/purchases.api';
@@ -9,11 +9,21 @@ import { POLineInput } from '../../features/purchases/types/purchase.types';
 
 export function PurchaseOrderFormPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: suppliers } = useSuppliers();
   const [supplierId, setSupplierId] = useState('');
   const [notes, setNotes] = useState('');
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
   const [lines, setLines] = useState<POLineInput[]>([]);
+
+  // Deep-link prefill from Inventory's reorder suggestions (spec §2.3).
+  useEffect(() => {
+    const prefill = (location.state as { prefill?: Array<{ medicineId: string; name: string; orderedQuantity: number }> } | null)?.prefill;
+    if (prefill?.length) {
+      setLines(prefill.map((p) => ({ medicineId: p.medicineId, medicineName: p.name, orderedQuantity: p.orderedQuantity, expectedUnitCost: 0 })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 

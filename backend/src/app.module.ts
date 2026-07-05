@@ -11,6 +11,7 @@ import { MedicineLookupsModule } from './modules/medicine-lookups/medicine-looku
 import { PurchasesModule } from './modules/purchases/purchases.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { CustomersModule } from './modules/customers/customers.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -31,6 +32,7 @@ import { HealthController } from './health/health.controller';
     PurchasesModule,
     SalesModule,
     CustomersModule,
+    InventoryModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

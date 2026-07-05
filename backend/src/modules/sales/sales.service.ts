@@ -6,7 +6,7 @@ import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.in
 import { SalesRepository } from './sales.repository';
 import { SalesEventsEmitter } from './events/sales-events.emitter';
 import { BatchFefoService } from './integrations/batch-fefo.service';
-import { InventoryDecrementService } from './integrations/inventory-decrement.service';
+import { InventoryService } from '../inventory/inventory.service';
 import { computeCart, LineInput } from './cart-calculations.util';
 import { FinalizeSaleDto, ParkSaleDto, PriceCheckDto, VoidSaleDto } from './dto/sales.dto';
 
@@ -28,7 +28,7 @@ export class SalesService {
     private readonly audit: AuditLogService,
     private readonly events: SalesEventsEmitter,
     private readonly fefo: BatchFefoService,
-    private readonly inventory: InventoryDecrementService,
+    private readonly inventory: InventoryService,
   ) {}
 
   private branch(user: AuthenticatedUser, requested?: string): string {
@@ -151,7 +151,12 @@ export class SalesService {
       for (let i = 0; i < dto.items.length; i++) {
         const it = dto.items[i];
         const alloc = await this.fefo.allocate(tx, { pharmacyId: user.pharmacyId, branchId, medicineId: it.medicineId, quantity: it.quantity, manualBatchId: it.batchId });
-        await this.inventory.decrement(tx, it.medicineId, it.quantity);
+        // Stock owned by Module 5 — record OUT through its ledger contract,
+        // enrolled in this sale's transaction (all-or-nothing).
+        await this.inventory.recordStockOut(
+          { pharmacyId: user.pharmacyId, branchId, medicineId: it.medicineId, batchId: alloc[0]?.batchId ?? it.batchId ?? null, quantity: it.quantity, unitCost: lineInputs[i].unitCost, reasonCode: 'SALE', referenceModule: 'SALE', referenceId: created.id, performedBy: user.userId },
+          tx,
+        );
         const saleItem = await tx.saleItem.create({
           data: {
             saleId: created.id,
@@ -229,7 +234,11 @@ export class SalesService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const item of sale.items) {
-        await this.inventory.increment(tx, item.medicineId, item.quantity);
+        // Reverse the sale via an offsetting ledger IN (original OUT preserved).
+        await this.inventory.recordStockIn(
+          { pharmacyId: sale.pharmacyId, branchId: sale.branchId, medicineId: item.medicineId, batchId: item.batchId, quantity: item.quantity, reasonCode: 'POSITIVE_ADJUSTMENT', referenceModule: 'SALE', referenceId: id, performedBy: user.userId, notes: 'Sale void reversal' },
+          tx,
+        );
         if (item.batchId) await this.fefo.reverse(tx, item.batchId, item.quantity);
       }
       await tx.saleComplianceRecord.updateMany({ where: { saleId: id }, data: { isVoided: true } });

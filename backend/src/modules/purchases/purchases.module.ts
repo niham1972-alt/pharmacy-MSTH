@@ -8,7 +8,6 @@ import { PurchasesRepository } from './purchases.repository';
 import { PurchaseConfigService } from './purchase-config.service';
 import { PurchaseEventsEmitter } from './events/purchase-events.emitter';
 import { BatchSyncService } from './integrations/batch-sync.service';
-import { InventorySyncService } from './integrations/inventory-sync.service';
 import { MedicineCostSyncService } from './integrations/medicine-cost-sync.service';
 
 @Module({
@@ -21,7 +20,6 @@ import { MedicineCostSyncService } from './integrations/medicine-cost-sync.servi
     PurchaseConfigService,
     PurchaseEventsEmitter,
     BatchSyncService,
-    InventorySyncService,
     MedicineCostSyncService,
   ],
 })

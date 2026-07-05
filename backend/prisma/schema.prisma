@@ -215,6 +215,128 @@ model Customer {
 }
 
 // ---------------------------------------------------------------------------
+// Module 5: Inventory / Stock Management — AUTHORITATIVE owner of stock.
+// `Inventory.currentStock` is a materialized aggregate per (medicine, branch)
+// kept in lock-step with an append-only `StockLedgerEntry` ledger by
+// InventoryService — the ONLY code permitted to mutate stock. It also mirrors
+// the value into the transitional `Medicine.currentStock` so existing reads
+// (Dashboard/Medicines/POS) keep working. `batchId` on the ledger is for
+// traceability; batch quantities themselves live in MedicineBatch (Module 6).
+// ---------------------------------------------------------------------------
+
+enum StockDirection {
+  IN
+  OUT
+}
+
+enum StockReasonCode {
+  PURCHASE_RECEIPT
+  SALE
+  SALES_RETURN
+  PURCHASE_RETURN
+  POSITIVE_ADJUSTMENT
+  NEGATIVE_ADJUSTMENT
+  EXPIRY_WRITE_OFF
+  DAMAGE_WRITE_OFF
+  TRANSFER_IN
+  TRANSFER_OUT
+  OPENING_STOCK
+}
+
+model Inventory {
+  id             String    @id @default(uuid())
+  pharmacyId     String
+  branchId       String
+  medicineId     String
+  batchId        String? // null = the per-(medicine,branch) aggregate row
+  currentStock   Int       @default(0)
+  reservedStock  Int       @default(0)
+  lastMovementAt DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([pharmacyId, branchId, medicineId, batchId])
+  @@index([pharmacyId, branchId, medicineId])
+  @@index([pharmacyId, branchId, currentStock])
+}
+
+model StockLedgerEntry {
+  id              String          @id @default(uuid())
+  pharmacyId      String
+  branchId        String
+  medicineId      String
+  batchId         String?
+  direction       StockDirection
+  quantity        Int // always positive; direction carries the sign
+  reasonCode      StockReasonCode
+  referenceModule String // PURCHASE | SALE | SALES_RETURN | PURCHASE_RETURN | ADJUSTMENT | TRANSFER
+  referenceId     String
+  unitCostAtTime  Decimal?        @db.Decimal(12, 2)
+  balanceAfter    Int // aggregate (medicine,branch) balance snapshot after this entry
+  performedBy     String
+  notes           String?
+  createdAt       DateTime        @default(now())
+
+  @@index([pharmacyId, branchId, medicineId, createdAt])
+  @@index([referenceModule, referenceId])
+  @@index([batchId])
+}
+
+enum TransferStatus {
+  PENDING
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+model StockTransfer {
+  id             String              @id @default(uuid())
+  pharmacyId     String
+  transferNumber String // TRF-YYYY-NNNNNN
+  sourceBranchId String
+  destBranchId   String
+  status         TransferStatus      @default(PENDING)
+  initiatedBy    String
+  approvedBy     String?
+  receivedBy     String?
+  notes          String?
+  createdAt      DateTime            @default(now())
+  completedAt    DateTime?
+  items          StockTransferItem[]
+
+  @@unique([pharmacyId, transferNumber])
+  @@index([pharmacyId, sourceBranchId, status])
+  @@index([pharmacyId, destBranchId, status])
+}
+
+model StockTransferItem {
+  id         String        @id @default(uuid())
+  transferId String
+  medicineId String
+  batchId    String?
+  quantity   Int
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@index([transferId])
+}
+
+model StockReconciliation {
+  id                     String   @id @default(uuid())
+  pharmacyId             String
+  branchId               String
+  medicineId             String
+  batchId                String?
+  expectedQuantity       Int
+  countedQuantity        Int
+  variance               Int
+  countedBy              String
+  countedAt              DateTime @default(now())
+  resolvedByAdjustmentId String? // links to Module 11's StockAdjustment once actioned
+  notes                  String?
+
+  @@index([pharmacyId, branchId, medicineId])
+}
+
+// ---------------------------------------------------------------------------
 // Module 2: Medicines / Products — AUTHORITATIVE (supersedes the Module 1 stub).
 // Master catalog referenced by Purchases, Sales/POS, Inventory, Batch & Expiry,
 // Barcode and Reports via `medicineId`.

@@ -6,10 +6,9 @@ import { CashierSessionsService } from './cashier-sessions.service';
 import { SalesRepository } from './sales.repository';
 import { SalesEventsEmitter } from './events/sales-events.emitter';
 import { BatchFefoService } from './integrations/batch-fefo.service';
-import { InventoryDecrementService } from './integrations/inventory-decrement.service';
 
 @Module({
   controllers: [SalesController, CashierSessionsController],
-  providers: [SalesService, CashierSessionsService, SalesRepository, SalesEventsEmitter, BatchFefoService, InventoryDecrementService],
+  providers: [SalesService, CashierSessionsService, SalesRepository, SalesEventsEmitter, BatchFefoService],
 })
 export class SalesModule {}

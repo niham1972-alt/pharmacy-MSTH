@@ -7,8 +7,8 @@ import { PurchasesRepository } from './purchases.repository';
 import { PurchaseConfigService } from './purchase-config.service';
 import { PurchaseEventsEmitter } from './events/purchase-events.emitter';
 import { BatchSyncService } from './integrations/batch-sync.service';
-import { InventorySyncService } from './integrations/inventory-sync.service';
 import { MedicineCostSyncService } from './integrations/medicine-cost-sync.service';
+import { InventoryService } from '../inventory/inventory.service';
 import { CreateGrnDto, GrnItemDto } from './dto/create-grn.dto';
 import { dec } from './purchase-orders.service';
 
@@ -20,7 +20,7 @@ export class GoodsReceiptsService {
     private readonly config: PurchaseConfigService,
     private readonly events: PurchaseEventsEmitter,
     private readonly batchSync: BatchSyncService,
-    private readonly inventorySync: InventorySyncService,
+    private readonly inventory: InventoryService,
     private readonly costSync: MedicineCostSyncService,
     private readonly audit: AuditLogService,
   ) {}
@@ -187,8 +187,7 @@ export class GoodsReceiptsService {
           rule: cfg.costingRule,
           changedBy: user.userId,
         });
-        await this.inventorySync.incrementStock(tx, i.medicineId, totalUnits);
-        await this.batchSync.createBatch(tx, {
+        const batch = await this.batchSync.createBatch(tx, {
           pharmacyId: user.pharmacyId,
           branchId,
           medicineId: i.medicineId,
@@ -196,6 +195,12 @@ export class GoodsReceiptsService {
           quantity: totalUnits,
           expiryDate: new Date(i.expiryDate),
         });
+        // Stock is now owned by Module 5 — record IN through its ledger contract
+        // (enrolled in this GRN transaction so it's all-or-nothing).
+        await this.inventory.recordStockIn(
+          { pharmacyId: user.pharmacyId, branchId, medicineId: i.medicineId, batchId: batch.id, quantity: totalUnits, unitCost: i.actualUnitCost, reasonCode: 'PURCHASE_RECEIPT', referenceModule: 'PURCHASE', referenceId: grn.id, performedBy: user.userId },
+          tx,
+        );
         if (!isDirect) {
           await tx.purchaseOrderItem.update({ where: { id: i.purchaseOrderItemId! }, data: { receivedQuantity: { increment: i.receivedQuantity } } });
         }

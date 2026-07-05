@@ -72,6 +72,10 @@ async function main() {
   await prisma.sale.deleteMany({ where: { pharmacyId: PHARMACY_ID } }); // cascades items/payments/compliance
   await prisma.cashierSession.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.parkedSale.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.stockLedgerEntry.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.inventory.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.stockTransfer.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.stockReconciliation.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.medicineBatch.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.medicine.deleteMany({ where: { pharmacyId: PHARMACY_ID } }); // cascades barcodes/priceHistory/conversions
   await prisma.category.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
@@ -152,9 +156,19 @@ async function main() {
         },
       },
     });
-    meds.push({ id: med.id, price: selling, cost });
+    meds.push({ id: med.id, price: selling, cost, stock });
   }
   console.log('  medicines:', meds.length);
+
+  // --- Inventory backfill: aggregate row + OPENING_STOCK ledger (Module 5) --
+  // currentStock === SUM(ledger) holds from the opening balance forward.
+  for (const m of meds) {
+    await prisma.inventory.create({ data: { pharmacyId: PHARMACY_ID, branchId: BRANCH_ID, medicineId: m.id, batchId: null, currentStock: m.stock, lastMovementAt: daysAgo(30) } });
+    await prisma.stockLedgerEntry.create({
+      data: { pharmacyId: PHARMACY_ID, branchId: BRANCH_ID, medicineId: m.id, direction: 'IN', quantity: m.stock, reasonCode: 'OPENING_STOCK', referenceModule: 'OPENING', referenceId: 'seed', unitCostAtTime: m.cost, balanceAfter: m.stock, performedBy: ADMIN_ID, notes: 'Opening stock' },
+    });
+  }
+  console.log('  inventory rows + opening ledger:', meds.length);
 
   // --- Batches (expiry alerts) ---------------------------------------------
   const batchPlan = [[0, 12], [1, 22], [3, 8], [4, 55], [5, 78], [8, 40], [9, 120], [10, 150], [11, 400], [0, 500]];
