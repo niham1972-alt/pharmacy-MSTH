@@ -53,6 +53,9 @@ export interface AllocateAndConsumeParams {
   performedBy: string;
   manualBatchId?: string | null;
   unitCost?: number;
+  /** Set when the caller already locked the medicine row in this tx (e.g. Sales
+   * finalize locks all lines up front) — avoids a redundant re-lock round-trip. */
+  medicineAlreadyLocked?: boolean;
 }
 
 export interface ConsumedBatch {
@@ -245,16 +248,18 @@ export class BatchesService {
 
     return this.run(tx, async (c) => {
       // Serialize concurrent consumption of this medicine's batches on the
-      // Medicine row (Module 5 also locks it in recordStockOut).
-      await c.$queryRaw`SELECT id FROM "Medicine" WHERE id = ${params.medicineId} FOR UPDATE`;
+      // Medicine row. Skipped only when the caller already holds the lock.
+      if (!params.medicineAlreadyLocked) await c.$queryRaw`SELECT id FROM "Medicine" WHERE id = ${params.medicineId} FOR UPDATE`;
 
       const totalBatches = await c.medicineBatch.count({ where: { pharmacyId: params.pharmacyId, branchId: params.branchId, medicineId: params.medicineId } });
 
       // Non-batch-tracked medicine (never had a batch) → direct Module 5 path (spec §21).
+      // We already hold the medicine row lock (above), so skip the redundant re-lock.
       if (totalBatches === 0) {
         await this.inventory.recordStockOut(
           { pharmacyId: params.pharmacyId, branchId: params.branchId, medicineId: params.medicineId, batchId: null, quantity: params.requiredQuantity, unitCost: params.unitCost, reasonCode: 'SALE', referenceModule: params.referenceModule, referenceId: params.referenceId, performedBy: params.performedBy },
           c,
+          { skipMedicineLock: true },
         );
         return [{ batchId: null, quantityConsumed: params.requiredQuantity }];
       }
@@ -292,6 +297,7 @@ export class BatchesService {
         await this.inventory.recordStockOut(
           { pharmacyId: params.pharmacyId, branchId: params.branchId, medicineId: params.medicineId, batchId: b.id, quantity: take, unitCost: params.unitCost, reasonCode: 'SALE', referenceModule: params.referenceModule, referenceId: params.referenceId, performedBy: params.performedBy },
           c,
+          { skipMedicineLock: true }, // lock already held at the top of this method
         );
         consumed.push({ batchId: b.id, quantityConsumed: take });
         remaining -= take;

@@ -21,6 +21,12 @@ export interface StockInParams {
 
 export type StockOutParams = Omit<StockInParams, 'unitCost'> & { unitCost?: number };
 
+/** When the caller already holds the medicine row lock in the same transaction
+ * (e.g. Module 6's allocateAndConsume), re-locking is a wasted round-trip. */
+export interface StockOpts {
+  skipMedicineLock?: boolean;
+}
+
 /**
  * THE authoritative owner of stock. `recordStockIn` / `recordStockOut` /
  * `reverseStockMovement` are the ONLY methods anywhere permitted to mutate stock
@@ -50,9 +56,9 @@ export class InventoryService {
     return tx.inventory.create({ data: { pharmacyId, branchId, medicineId, batchId: null, currentStock: 0 } });
   }
 
-  async recordStockIn(params: StockInParams, tx?: Prisma.TransactionClient) {
+  async recordStockIn(params: StockInParams, tx?: Prisma.TransactionClient, opts?: StockOpts) {
     return this.run(tx, async (client) => {
-      await client.$queryRaw`SELECT id FROM "Medicine" WHERE id = ${params.medicineId} FOR UPDATE`;
+      if (!opts?.skipMedicineLock) await client.$queryRaw`SELECT id FROM "Medicine" WHERE id = ${params.medicineId} FOR UPDATE`;
       const agg = await this.aggregateRow(client, params.pharmacyId, params.branchId, params.medicineId);
       const balanceAfter = agg.currentStock + params.quantity;
       await client.inventory.update({ where: { id: agg.id }, data: { currentStock: balanceAfter, lastMovementAt: new Date() } });
@@ -79,9 +85,9 @@ export class InventoryService {
     });
   }
 
-  async recordStockOut(params: StockOutParams, tx?: Prisma.TransactionClient) {
+  async recordStockOut(params: StockOutParams, tx?: Prisma.TransactionClient, opts?: StockOpts) {
     return this.run(tx, async (client) => {
-      await client.$queryRaw`SELECT id FROM "Medicine" WHERE id = ${params.medicineId} FOR UPDATE`;
+      if (!opts?.skipMedicineLock) await client.$queryRaw`SELECT id FROM "Medicine" WHERE id = ${params.medicineId} FOR UPDATE`;
       const agg = await this.aggregateRow(client, params.pharmacyId, params.branchId, params.medicineId);
       if (!ALLOW_NEGATIVE_STOCK && agg.currentStock < params.quantity) {
         throw new BadRequestException({ errorCode: 'INSUFFICIENT_STOCK', message: `Insufficient stock. Available: ${agg.currentStock}, required: ${params.quantity}.`, data: { available: agg.currentStock } });

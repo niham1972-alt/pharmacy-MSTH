@@ -146,7 +146,8 @@ export class SalesService {
       for (let i = 0; i < dto.items.length; i++) {
         const it = dto.items[i];
         const alloc = await this.batches.allocateAndConsume(
-          { pharmacyId: user.pharmacyId, branchId, medicineId: it.medicineId, requiredQuantity: it.quantity, referenceModule: 'SALE', referenceId: created.id, performedBy: user.userId, manualBatchId: it.batchId, unitCost: lineInputs[i].unitCost },
+          // Medicine rows were locked FOR UPDATE up front (see above) — skip re-locks.
+          { pharmacyId: user.pharmacyId, branchId, medicineId: it.medicineId, requiredQuantity: it.quantity, referenceModule: 'SALE', referenceId: created.id, performedBy: user.userId, manualBatchId: it.batchId, unitCost: lineInputs[i].unitCost, medicineAlreadyLocked: true },
           tx,
         );
         const saleItem = await tx.saleItem.create({
