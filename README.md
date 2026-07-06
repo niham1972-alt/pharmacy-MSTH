@@ -1,4 +1,4 @@
-# Pharmacy Management System — Modules 1–8 (Dashboard · Medicines · Purchases · Sales/POS · Inventory · Batch & Expiry · Suppliers · Customers)
+# Pharmacy Management System — Modules 1–8 + 16 (Dashboard · Medicines · Purchases · Sales/POS · Inventory · Batch & Expiry · Suppliers · Customers · Users & Roles)
 
 Enterprise Pharmacy Management Software, built module by module. This is **Module 1: Dashboard** — the role-aware operational landing screen. 17 other modules (Medicines, Sales/POS, Inventory, Batch & Expiry, Suppliers, Customers, Returns, Stock Adjustment, Barcode, Expenses, Reports, Audit Logs, Users & Roles, Backup & Restore, Settings, Purchases, ...) do not exist yet — the Dashboard depends on clearly-marked **stub** Prisma models for them (see `backend/prisma/schema.prisma`) that later modules will supersede.
 
@@ -245,6 +245,20 @@ Migration `20260708000000_customers_module` **supersedes the Module 4 `Customer`
 - Consent flags (`consentHealthDataStorage`, `consentMarketingContact`) are **tracking-only** in this version (not yet enforcement).
 
 `CustomerSelector` / search built in Module 8, **reused by Module 4's POS** (repointed to `/customers/search` + `/customers/quick-add`). Frontend: `frontend/src/pages/Customers/*` (list w/ tags + gated spend, tabbed detail where the **🔒 Health Info tab is absent — not disabled — for unauthorised roles and never fetches**, sectioned create/edit form, side-by-side Merge tool).
+
+## Module 16: Users & Roles (RBAC) — the security foundation
+
+Migration `20260709000000_users_roles_rbac` (additions only — **no reset**) adds `User` (linked to Supabase Auth by `authUserId`), `UserRoleAssignment`, `UserBranchAccess`, `UserPermissionOverride`, `LoginActivity`, `StepUpVerification` + enums `SystemRole`/`UserStatus`/`StepUpStatus`.
+
+### How JWT claims are populated & refreshed (read this before debugging "my permission change didn't take effect")
+Every module's `@Roles()` guard reads **lowercase role claims from the verified JWT** (`app_metadata`) — a fast, per-request, no-DB-hit check via the canonical `backend/src/common/guards/roles.guard.ts` (this stays the one true guard; Module 16 does **not** move it — that would be pure churn across 18 modules). Module 16 is **authoritative for what those claims should say**: on invite / role change / branch change / suspend / deactivate, `UsersService` computes the claims (`AuthorizationService.computeClaims`) and **pushes them to Supabase Auth `app_metadata`** via the admin API (`SupabaseAdminService`). `SystemRole` (UPPERCASE DB enum) ↔ `PharmacyRole` (lowercase claim) map in one place (`permission-matrix.config.ts`). **Staleness bound:** a user's *existing* access token keeps its old claims until it naturally expires (Supabase default ~1h); suspend/deactivate also **revokes the refresh token** immediately (so no new token can be minted) and syncs `status` into the claims — the `jwt-auth.guard` rejects `SUSPENDED`/`DEACTIVATED` on the next request that carries the updated status. `super_admin`/`admin` cannot be the last active admin (guarded).
+
+- **`AuthorizationService`** (`@Global`) — `hasPermission(userId, key)` resolves a role's baseline from the central **permission matrix** (`config/permission-matrix.config.ts`, 27 keys across all built modules) **plus active (non-expired) per-user overrides** (overrides only ADD, never subtract). `/users/me` returns the caller's resolved permission keys, powering the foundational **`useCurrentUser().can(key)`** hook.
+- **Lifecycle**: invite (creates the Supabase auth user + app record `PENDING_ACTIVATION`, syncs claims), `login-event` (activates + records `LoginActivity`), update, assign/remove role (**can't remove the last role**), grant/revoke branch (**non-super-admin keeps ≥1**), suspend/reactivate/deactivate + revoke-sessions.
+- **Step-up (re-auth)** — `POST /auth/step-up/request` then `/:id/verify`: the elevated user enters their OWN password; the backend verifies it against Supabase **and re-checks their actual current role server-side** (never a stale claim) before approving. Requests expire after `STEP_UP_WINDOW_MS` (default 2 min). The reusable **`StepUpAuthModal` + `stepUpApi`** (`features/users`) are built here for Module 4 (discount/prescription) and Module 6 (write-off) elevated flows.
+- **Permission Matrix view** (`super_admin` only, 403 for everyone else incl. admin) — read-only grid of every permission × role, rendered from the static config.
+
+Frontend: `frontend/src/pages/Users/*` (list w/ role + status badges + Invite modal, tabbed detail — Roles & Branches / Permission Overrides / Login Activity with suspend/reactivate/deactivate/revoke actions, Permission Matrix, My Profile). Nav gated to admin/super_admin.
 
 ## Role-permission matrix
 

@@ -115,6 +115,14 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token is missing required pharmacy claims');
     }
 
+    // Module 16 syncs account status into the JWT claims. A suspended/deactivated
+    // user's existing token is cut off on its next request (staleness bounded by
+    // the token's own TTL; suspend/deactivate also revokes the refresh token).
+    const status = (payload.app_metadata as { status?: string }).status;
+    if (status === 'SUSPENDED' || status === 'DEACTIVATED') {
+      throw new UnauthorizedException(`Account is ${status.toLowerCase()}`);
+    }
+
     const user: AuthenticatedUser = {
       userId: payload.sub,
       email: payload.email,

@@ -91,6 +91,8 @@ async function main() {
   await prisma.supplier.deleteMany({ where: { pharmacyId: PHARMACY_ID } }); // cascades contacts/addresses/documents/prices
   await prisma.expense.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
   await prisma.auditLog.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.stepUpVerification.deleteMany({ where: { pharmacyId: PHARMACY_ID } });
+  await prisma.user.deleteMany({ where: { pharmacyId: PHARMACY_ID } }); // cascades roles/branch-access/overrides/login-activity
 
   // --- Settings: PKR + Pakistan timezone -----------------------------------
   await prisma.pharmacySettings.upsert({
@@ -421,6 +423,30 @@ async function main() {
     });
   }
   console.log('  activity events:', activityPlan.length);
+
+  // --- Users & Roles (Module 16) -------------------------------------------
+  // The admin User is linked to the real Supabase auth id (ADMIN_ID). The others
+  // are demo rows (placeholder authUserId) so the Users list has content; they
+  // become real when actually invited through the app (which creates the auth user).
+  const USERS = [
+    { authUserId: ADMIN_ID, name: 'Pharmacy Admin', email: 'admin@pharmacymsth.com', role: 'ADMIN', status: 'ACTIVE' },
+    { authUserId: 'seed-user-pharmacist', name: 'Dr. Sana Malik', email: 'pharmacist@pharmacymsth.com', role: 'PHARMACIST', status: 'ACTIVE' },
+    { authUserId: 'seed-user-cashier', name: 'Kamran Ali', email: 'cashier@pharmacymsth.com', role: 'CASHIER', status: 'ACTIVE' },
+    { authUserId: 'seed-user-invmgr', name: 'Nadia Rehman', email: 'inventory@pharmacymsth.com', role: 'INVENTORY_MANAGER', status: 'ACTIVE' },
+    { authUserId: 'seed-user-accountant', name: 'Faisal Iqbal', email: 'accountant@pharmacymsth.com', role: 'ACCOUNTANT', status: 'ACTIVE' },
+    { authUserId: 'seed-user-auditor', name: 'Zara Sheikh', email: 'auditor@pharmacymsth.com', role: 'AUDITOR', status: 'SUSPENDED' },
+  ];
+  for (const u of USERS) {
+    await prisma.user.create({
+      data: {
+        pharmacyId: PHARMACY_ID, authUserId: u.authUserId, name: u.name, email: u.email, status: u.status, createdBy: ADMIN_ID,
+        roles: { create: [{ role: u.role, assignedBy: ADMIN_ID }] },
+        branchAccess: { create: [{ branchId: BRANCH_ID, isDefault: true, grantedBy: ADMIN_ID }] },
+        loginActivity: { create: [{ loginAt: daysAgo(randInt(0, 3), randInt(8, 18)), success: true, ipAddress: '127.0.0.1', userAgent: 'seed' }] },
+      },
+    });
+  }
+  console.log('  users:', USERS.length);
 
   console.log('Seed complete ✅');
 }

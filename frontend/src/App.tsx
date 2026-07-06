@@ -34,6 +34,10 @@ import { CustomersListPage } from './pages/Customers/CustomersListPage';
 import { CustomerDetailPage } from './pages/Customers/CustomerDetailPage';
 import { CustomerFormPage } from './pages/Customers/CustomerFormPage';
 import { MergeDuplicatesPage } from './pages/Customers/MergeDuplicatesPage';
+import { UsersListPage } from './pages/Users/UsersListPage';
+import { UserDetailPage } from './pages/Users/UserDetailPage';
+import { PermissionMatrixPage } from './pages/Users/PermissionMatrixPage';
+import { MyProfilePage } from './pages/Users/MyProfilePage';
 
 function ProtectedLayout() {
   return (
@@ -93,6 +97,13 @@ function CustomersGate() {
   return <Outlet />;
 }
 
+/** Users & Roles: admin/super_admin only (spec §13). */
+function UsersGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin'].includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -145,6 +156,12 @@ export default function App() {
           <Route path="/customers/merge" element={<MergeDuplicatesPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/customers/:id/edit" element={<CustomerFormPage />} />
+        </Route>
+        <Route path="/my-profile" element={<MyProfilePage />} />
+        <Route element={<UsersGate />}>
+          <Route path="/users" element={<UsersListPage />} />
+          <Route path="/users/permission-matrix" element={<PermissionMatrixPage />} />
+          <Route path="/users/:id" element={<UserDetailPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

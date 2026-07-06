@@ -83,32 +83,32 @@ enum SessionStatus {
 }
 
 model Sale {
-  id               String                 @id @default(uuid())
-  pharmacyId       String
-  branchId         String
-  saleNumber       String // SL-YYYY-NNNNNN
-  cashierSessionId String
-  cashierId        String
-  customerId       String? // nullable = walk-in
-  saleDate         DateTime               @default(now())
-  status           SaleStatus             @default(COMPLETED)
-  subTotal         Decimal                @db.Decimal(14, 2)
-  discountTotal    Decimal                @default(0) @db.Decimal(14, 2)
-  taxTotal         Decimal                @default(0) @db.Decimal(14, 2)
-  grandTotal       Decimal                @db.Decimal(14, 2)
-  totalCost        Decimal                @db.Decimal(14, 2) // profit basis snapshot
+  id                 String                 @id @default(uuid())
+  pharmacyId         String
+  branchId           String
+  saleNumber         String // SL-YYYY-NNNNNN
+  cashierSessionId   String
+  cashierId          String
+  customerId         String? // nullable = walk-in
+  saleDate           DateTime               @default(now())
+  status             SaleStatus             @default(COMPLETED)
+  subTotal           Decimal                @db.Decimal(14, 2)
+  discountTotal      Decimal                @default(0) @db.Decimal(14, 2)
+  taxTotal           Decimal                @default(0) @db.Decimal(14, 2)
+  grandTotal         Decimal                @db.Decimal(14, 2)
+  totalCost          Decimal                @db.Decimal(14, 2) // profit basis snapshot
   discountApprovedBy String?
-  voidedBy         String?
-  voidedAt         DateTime?
-  voidReason       String?
-  notes            String?
-  idempotencyKey   String?
-  createdAt        DateTime               @default(now())
-  cashierSession   CashierSession         @relation(fields: [cashierSessionId], references: [id])
-  customer         Customer?              @relation(fields: [customerId], references: [id])
-  items            SaleItem[]
-  payments         SalePayment[]
-  complianceRecords SaleComplianceRecord[]
+  voidedBy           String?
+  voidedAt           DateTime?
+  voidReason         String?
+  notes              String?
+  idempotencyKey     String?
+  createdAt          DateTime               @default(now())
+  cashierSession     CashierSession         @relation(fields: [cashierSessionId], references: [id])
+  customer           Customer?              @relation(fields: [customerId], references: [id])
+  items              SaleItem[]
+  payments           SalePayment[]
+  complianceRecords  SaleComplianceRecord[]
 
   @@unique([pharmacyId, saleNumber])
   @@unique([pharmacyId, idempotencyKey])
@@ -203,26 +203,26 @@ model ParkedSale {
 // architecturally, not by field redaction. `Sale.customerId` is now a real FK.
 // ---------------------------------------------------------------------------
 model Customer {
-  id                    String                  @id @default(uuid())
-  pharmacyId            String
-  name                  String
-  phone                 String
-  email                 String?
-  dateOfBirth           DateTime?
-  gender                String?
-  nationalIdOrPatientId String?
-  addressLine1          String?
-  addressLine2          String?
-  city                  String?
-  emergencyContactName  String?
-  emergencyContactPhone String?
-  isActive              Boolean                 @default(true)
-  isMergedInto          String? // if set, merged away → points to surviving Customer.id
-  consentHealthDataStorage Boolean              @default(false)
-  consentMarketingContact  Boolean              @default(false)
-  createdBy             String
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  id                       String    @id @default(uuid())
+  pharmacyId               String
+  name                     String
+  phone                    String
+  email                    String?
+  dateOfBirth              DateTime?
+  gender                   String?
+  nationalIdOrPatientId    String?
+  addressLine1             String?
+  addressLine2             String?
+  city                     String?
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  isActive                 Boolean   @default(true)
+  isMergedInto             String? // if set, merged away → points to surviving Customer.id
+  consentHealthDataStorage Boolean   @default(false)
+  consentMarketingContact  Boolean   @default(false)
+  createdBy                String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   healthProfile CustomerHealthProfile?
   prescriptions PrescriptionRecord[]
@@ -265,7 +265,7 @@ model PrescriptionRecord {
 }
 
 model CustomerTag {
-  id         String @id @default(uuid())
+  id         String  @id @default(uuid())
   pharmacyId String
   name       String
   color      String?
@@ -627,7 +627,7 @@ model MedicineBatch {
   sourceGrnId          String? // loose ref to Module 3's GoodsReceipt
   sourceGrnItemId      String?
   createdAt            DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  updatedAt            DateTime    @updatedAt
 
   writeOffs     BatchWriteOff[]
   recallRecords BatchRecall[]
@@ -914,13 +914,13 @@ model PurchasePayment {
 }
 
 model PurchaseAttachment {
-  id              String        @id @default(uuid())
+  id              String         @id @default(uuid())
   purchaseOrderId String?
   goodsReceiptId  String?
   fileUrl         String
   fileType        String // QUOTATION | INVOICE | OTHER
   uploadedBy      String
-  uploadedAt      DateTime      @default(now())
+  uploadedAt      DateTime       @default(now())
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   goodsReceipt    GoodsReceipt?  @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
 
@@ -980,4 +980,132 @@ model PharmacySettings {
   expiryThresholdDays Int      @default(90)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Module 16: Users & Roles (RBAC) — AUTHORITATIVE identity/roles/branch-access.
+// Supabase Auth owns credentials; `User.authUserId` bridges to it. Every other
+// module's @Roles() reads lowercase role claims from the JWT (app_metadata),
+// which this module keeps in sync with `UserRoleAssignment`/`UserBranchAccess`.
+// SystemRole is UPPERCASE here (DB enum); it maps to the lowercase PharmacyRole
+// used in JWT claims + guards. Additions only — no existing table changed.
+// ---------------------------------------------------------------------------
+enum UserStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum SystemRole {
+  SUPER_ADMIN
+  ADMIN
+  PHARMACIST
+  INVENTORY_MANAGER
+  CASHIER
+  ACCOUNTANT
+  AUDITOR
+}
+
+enum StepUpStatus {
+  PENDING
+  APPROVED
+  DENIED
+  EXPIRED
+}
+
+model User {
+  id              String     @id @default(uuid())
+  pharmacyId      String
+  authUserId      String     @unique
+  name            String
+  email           String
+  phone           String?
+  employeeId      String?
+  profilePhotoUrl String?
+  status          UserStatus @default(PENDING_ACTIVATION)
+  createdBy       String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deactivatedAt   DateTime?
+  deactivatedBy   String?
+
+  roles               UserRoleAssignment[]
+  branchAccess        UserBranchAccess[]
+  permissionOverrides UserPermissionOverride[]
+  loginActivity       LoginActivity[]
+
+  @@unique([pharmacyId, email])
+  @@index([pharmacyId, status])
+}
+
+model UserRoleAssignment {
+  id         String     @id @default(uuid())
+  userId     String
+  role       SystemRole
+  assignedBy String
+  assignedAt DateTime   @default(now())
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+}
+
+model UserBranchAccess {
+  id        String   @id @default(uuid())
+  userId    String
+  branchId  String
+  isDefault Boolean  @default(false)
+  grantedBy String
+  grantedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, branchId])
+  @@index([userId])
+  @@index([branchId])
+}
+
+model UserPermissionOverride {
+  id            String    @id @default(uuid())
+  userId        String
+  permissionKey String
+  grantedBy     String
+  grantedAt     DateTime  @default(now())
+  reason        String?
+  expiresAt     DateTime?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionKey])
+  @@index([userId])
+}
+
+model LoginActivity {
+  id            String   @id @default(uuid())
+  userId        String
+  loginAt       DateTime @default(now())
+  ipAddress     String?
+  userAgent     String?
+  success       Boolean  @default(true)
+  failureReason String?
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, loginAt])
+}
+
+model StepUpVerification {
+  id                String       @id @default(uuid())
+  pharmacyId        String
+  requestedByUserId String
+  verifiedByUserId  String?
+  actionType        String
+  referenceModule   String
+  referenceId       String?
+  requiredRole      SystemRole
+  status            StepUpStatus @default(PENDING)
+  requestedAt       DateTime     @default(now())
+  resolvedAt        DateTime?
+  expiresAt         DateTime
+
+  @@index([requestedByUserId])
+  @@index([status])
 }

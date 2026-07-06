@@ -16,6 +16,7 @@ const NAV_ITEMS: Array<{ label: string; to: string | null; hideForRoles?: string
   { label: 'Purchases', to: '/purchases', hideForRoles: ['cashier'] },
   { label: 'Suppliers', to: '/suppliers', hideForRoles: ['cashier'] },
   { label: 'Customers', to: '/customers', hideForRoles: ['cashier', 'inventory_manager'] },
+  { label: 'Users & Roles', to: '/users', hideForRoles: ['pharmacist', 'inventory_manager', 'cashier', 'accountant', 'auditor'] },
   { label: 'Reports', to: null },
 ];
 
