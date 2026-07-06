@@ -1,15 +1,28 @@
+export type AuditSeverityLevel = 'ROUTINE' | 'SENSITIVE' | 'CRITICAL';
+
 export interface AuditLogEntry {
   pharmacyId: string;
-  branchId: string;
+  branchId?: string;
+  // `userId` is the calling convention every module already uses; Module 15 maps
+  // it to the AuditLog.performedBy column. Kept for backward compatibility.
   userId: string;
   action: string;
   entityType: string;
-  entityId: string;
+  entityId?: string;
   metadata?: Record<string, unknown>;
+  // Optional per-call severity override; defaults to the action-registry value.
+  severity?: AuditSeverityLevel;
 }
 
-export interface AuditLogEntryRecord extends AuditLogEntry {
+export interface AuditLogEntryRecord {
   id: string;
+  pharmacyId: string;
+  branchId?: string | null;
+  userId: string;
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
 }
 

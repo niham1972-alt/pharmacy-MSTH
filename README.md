@@ -1,4 +1,4 @@
-# Pharmacy Management System — Modules 1–8 + 16 (Dashboard · Medicines · Purchases · Sales/POS · Inventory · Batch & Expiry · Suppliers · Customers · Users & Roles)
+# Pharmacy Management System — Modules 1–8 + 15–16 (Dashboard · Medicines · Purchases · Sales/POS · Inventory · Batch & Expiry · Suppliers · Customers · Audit Logs · Users & Roles)
 
 Enterprise Pharmacy Management Software, built module by module. This is **Module 1: Dashboard** — the role-aware operational landing screen. 17 other modules (Medicines, Sales/POS, Inventory, Batch & Expiry, Suppliers, Customers, Returns, Stock Adjustment, Barcode, Expenses, Reports, Audit Logs, Users & Roles, Backup & Restore, Settings, Purchases, ...) do not exist yet — the Dashboard depends on clearly-marked **stub** Prisma models for them (see `backend/prisma/schema.prisma`) that later modules will supersede.
 
@@ -259,6 +259,20 @@ Every module's `@Roles()` guard reads **lowercase role claims from the verified 
 - **Permission Matrix view** (`super_admin` only, 403 for everyone else incl. admin) — read-only grid of every permission × role, rendered from the static config.
 
 Frontend: `frontend/src/pages/Users/*` (list w/ role + status badges + Invite modal, tabbed detail — Roles & Branches / Permission Overrides / Login Activity with suspend/reactivate/deactivate/revoke actions, Permission Matrix, My Profile). Nav gated to admin/super_admin.
+
+## Module 15: Audit Logs — the system-wide trail (integration-completion)
+
+Every module already called `AuditLogService.record()`; this module makes that destination real. Migration `20260710000000_audit_logs_module` **supersedes the Module 1 `AuditLog` stub** with a **data-preserving** migration (audit history must never be wiped — it RENAMEs `userId`→`performedBy`, relaxes `branchId`/`entityId` to nullable, adds `performedByName`/`severity`/`ipAddress`/`userAgent`/`recordHash`/`previousHash` + the 5 investigation indexes) plus `AuditRetentionPolicy` + `AuditIntegrityCheck` + `AuditSeverity` enum.
+
+**Action-naming convention: `MODULE_ENTITY_VERB`** (e.g. `MEDICINE_PRICE_CHANGED`, `SALE_VOIDED`, `BATCH_RECALLED`). Every action across Modules 1–8 + 16 is registered in `modules/audit-logs/config/action-registry.ts` with a human-readable label + default severity (`ROUTINE`/`SENSITIVE`/`CRITICAL`) — the single place new modules register their actions. Unregistered actions are still recorded (never dropped) and flagged with a `?` in the UI.
+
+**`record()` design** (`common/audit/audit-log.service.impl.ts`, behind the interface every module imports): (1) **fail-safe** — the whole write is try/caught, so an audit failure is logged to app monitoring but NEVER propagates to break the caller's business transaction (callers invoke it *after* their tx commits); (2) `performedByName` denormalized from Module 16's `User` (5-min in-memory cache — no per-write DB lookup for a busy cashier); (3) severity from the registry unless the caller overrides.
+
+**Tamper-evidence — per-pharmacy HMAC hash-chain** (chosen approach, documented for compliance): each record's `recordHash = HMAC(AUDIT_HASH_SECRET, previousHash + canonical content)`. Any retroactive DB edit changes that row's content hash and breaks every subsequent link. Writes are serialized per-pharmacy with a `pg_advisory_xact_lock` so concurrent writes don't fork the chain. `POST /audit-logs/integrity-check/run` walks the chain (skipping legacy pre-chain rows) and records the result; the UI shows a green "hash-chain intact" / red "chain break detected" banner. **Retention:** `AuditRetentionPolicy` (default 24 months detailed) is schema-ready; **there is no update/delete endpoint anywhere for audit records — that absence is the safeguard** (a correction is a new event, never an edit).
+
+Endpoints (base `/api/audit-logs`, admin/auditor for the global log): `GET /` (filter/paginate), `/entity?entityType=&entityId=` (**broader roles** — mirrors the host module's entity access, powers embedded trails), `/user/:userId`, `/sensitive`, `/export` (CSV, 1-year cap), `/controlled-substance-report`, `/action-registry`, `/integrity-status`, `POST /integrity-check/run`. **`cashier` is fully excluded.**
+
+**`AuditTrailTab` + `useEntityAuditTrail`** (`features/audit-logs`) is the reusable component **now embedded in Module 2 (Medicine), 6 (Batch) and 7 (Supplier) detail pages** — the shared infra those modules assumed. `MetadataDetailView` renders the common `{ before, after }` / `{ changes }` shapes as a clean diff. Frontend pages: Global log (filters + integrity banner + CSV export), Sensitive Events feed, User Activity.
 
 ## Role-permission matrix
 

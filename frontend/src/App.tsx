@@ -38,6 +38,9 @@ import { UsersListPage } from './pages/Users/UsersListPage';
 import { UserDetailPage } from './pages/Users/UserDetailPage';
 import { PermissionMatrixPage } from './pages/Users/PermissionMatrixPage';
 import { MyProfilePage } from './pages/Users/MyProfilePage';
+import { AuditLogsListPage } from './pages/AuditLogs/AuditLogsListPage';
+import { SensitiveEventsPage } from './pages/AuditLogs/SensitiveEventsPage';
+import { UserActivityPage } from './pages/AuditLogs/UserActivityPage';
 
 function ProtectedLayout() {
   return (
@@ -104,6 +107,13 @@ function UsersGate() {
   return <Outlet />;
 }
 
+/** Audit Log: admin/auditor only for the global log (spec §13). */
+function AuditGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin', 'auditor'].includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -162,6 +172,11 @@ export default function App() {
           <Route path="/users" element={<UsersListPage />} />
           <Route path="/users/permission-matrix" element={<PermissionMatrixPage />} />
           <Route path="/users/:id" element={<UserDetailPage />} />
+        </Route>
+        <Route element={<AuditGate />}>
+          <Route path="/audit-logs" element={<AuditLogsListPage />} />
+          <Route path="/audit-logs/sensitive" element={<SensitiveEventsPage />} />
+          <Route path="/audit-logs/user/:userId" element={<UserActivityPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -6,11 +6,12 @@ import { ApiClientError } from '../../shared/api/client';
 import { formatCurrency } from '../../features/dashboard/utils/formatCurrency';
 import { suppliersApi } from '../../features/suppliers/api/suppliers.api';
 import { ActiveBadge, LicenseBadge, TypeBadge } from '../../features/suppliers/components/SupplierStatusBadges';
+import { AuditTrailTab } from '../../features/audit-logs/components/AuditTrailTab';
 
 const MANAGE = ['super_admin', 'admin', 'inventory_manager'];
 const PAYABLES = ['super_admin', 'admin', 'accountant', 'auditor'];
 const PERF = ['super_admin', 'admin', 'inventory_manager', 'accountant', 'auditor'];
-const TABS = ['Overview', 'Contacts', 'Documents', 'Pricing', 'Performance', 'Payables'] as const;
+const TABS = ['Overview', 'Contacts', 'Documents', 'Pricing', 'Performance', 'Payables', 'Audit Trail'] as const;
 
 export function SupplierDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,7 +24,8 @@ export function SupplierDetailPage() {
 
   const canManage = MANAGE.includes(user?.role ?? '');
   const canDelete = ['super_admin', 'admin'].includes(user?.role ?? '');
-  const visibleTabs = TABS.filter((t) => (t === 'Payables' ? PAYABLES.includes(user?.role ?? '') : t === 'Performance' ? PERF.includes(user?.role ?? '') : true));
+  const canAudit = ['super_admin', 'admin', 'auditor'].includes(user?.role ?? '');
+  const visibleTabs = TABS.filter((t) => (t === 'Payables' ? PAYABLES.includes(user?.role ?? '') : t === 'Performance' ? PERF.includes(user?.role ?? '') : t === 'Audit Trail' ? canAudit : true));
 
   const perfQ = useQuery({ queryKey: ['suppliers', 'perf', id], queryFn: async () => (await suppliersApi.performance(id!)).data, enabled: !!id && tab === 'Performance' && PERF.includes(user?.role ?? '') });
   const payQ = useQuery({ queryKey: ['suppliers', 'payables', id], queryFn: async () => (await suppliersApi.payables(id!)).data, enabled: !!id && tab === 'Payables' && PAYABLES.includes(user?.role ?? '') });
@@ -152,6 +154,8 @@ export function SupplierDetailPage() {
           )}
         </div>
       )}
+
+      {tab === 'Audit Trail' && <AuditTrailTab entityType="SUPPLIER" entityId={s.id} />}
     </div>
   );
 }

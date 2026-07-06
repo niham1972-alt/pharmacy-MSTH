@@ -954,18 +954,61 @@ model Expense {
 }
 
 /// STUB — see Module 15 (Audit Logs)
+// ---------------------------------------------------------------------------
+// Module 15: Audit Logs — AUTHORITATIVE (supersedes the Module 1 stub). The
+// system-wide "who did what, when" trail every module writes to via
+// AuditLogService.record(). Immutable (no update/delete endpoints) + optional
+// per-pharmacy hash-chain for tamper-evidence.
+// ---------------------------------------------------------------------------
+enum AuditSeverity {
+  ROUTINE
+  SENSITIVE
+  CRITICAL
+}
+
 model AuditLog {
-  id         String   @id @default(uuid())
-  pharmacyId String
-  branchId   String
-  userId     String
-  action     String
-  entityType String
-  entityId   String
-  metadata   Json?
-  createdAt  DateTime @default(now())
+  id              String        @id @default(uuid())
+  pharmacyId      String
+  branchId        String?
+  action          String
+  entityType      String
+  entityId        String?
+  performedBy     String
+  performedByName String?
+  severity        AuditSeverity @default(ROUTINE)
+  metadata        Json?
+  ipAddress       String?
+  userAgent       String?
+  recordHash      String?
+  previousHash    String?
+  createdAt       DateTime      @default(now())
 
   @@index([pharmacyId, branchId, createdAt])
+  @@index([pharmacyId, entityType, entityId])
+  @@index([pharmacyId, performedBy, createdAt])
+  @@index([pharmacyId, severity, createdAt])
+  @@index([action])
+}
+
+model AuditRetentionPolicy {
+  id                      String   @id @default(uuid())
+  pharmacyId              String   @unique
+  detailedRetentionMonths Int      @default(24)
+  archiveAfterMonths      Int?
+  updatedBy               String
+  updatedAt               DateTime @updatedAt
+}
+
+model AuditIntegrityCheck {
+  id               String   @id @default(uuid())
+  pharmacyId       String
+  checkedAt        DateTime @default(now())
+  recordsChecked   Int
+  chainIntact      Boolean
+  brokenAtRecordId String?
+  notes            String?
+
+  @@index([pharmacyId, checkedAt])
 }
 
 /// STUB — see Module 18 (Settings). Dashboard reads expiry threshold,

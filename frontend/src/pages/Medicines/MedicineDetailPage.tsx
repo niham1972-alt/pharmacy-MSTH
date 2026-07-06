@@ -4,12 +4,13 @@ import { useAuth } from '../../shared/auth/AuthContext';
 import { formatCurrency } from '../../features/dashboard/utils/formatCurrency';
 import { useMedicineDetail, useMedicineMutations, usePriceHistory } from '../../features/medicines/hooks/useMedicines';
 import { StatusBadge, StockStatusBadge } from '../../features/medicines/components/StockStatusBadge';
+import { AuditTrailTab } from '../../features/audit-logs/components/AuditTrailTab';
 
 const CAN_EDIT = ['super_admin', 'admin', 'pharmacist', 'inventory_manager'];
 const CAN_MANAGE = ['super_admin', 'admin', 'inventory_manager'];
 const CAN_DELETE = ['super_admin', 'admin'];
 
-type Tab = 'overview' | 'pricing' | 'history' | 'barcodes';
+type Tab = 'overview' | 'pricing' | 'history' | 'barcodes' | 'audit';
 
 export function MedicineDetailPage() {
   const { id } = useParams();
@@ -24,6 +25,7 @@ export function MedicineDetailPage() {
   const canDelete = CAN_DELETE.includes(user?.role ?? '');
   const canSeeCost = user?.role !== 'cashier';
   const canSeeHistory = user?.role !== 'cashier';
+  const canSeeAudit = ['super_admin', 'admin', 'pharmacist', 'inventory_manager', 'auditor'].includes(user?.role ?? '');
 
   const history = usePriceHistory(id, tab === 'history' && canSeeHistory);
 
@@ -62,6 +64,7 @@ export function MedicineDetailPage() {
     ['pricing', 'Pricing'],
     ...(canSeeHistory ? ([['history', 'Price History']] as Array<[Tab, string]>) : []),
     ['barcodes', 'Barcodes'],
+    ...(canSeeAudit ? ([['audit', 'Audit Trail']] as Array<[Tab, string]>) : []),
   ];
 
   const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
@@ -148,6 +151,8 @@ export function MedicineDetailPage() {
           ))}
         </div>
       )}
+
+      {tab === 'audit' && canSeeAudit && <AuditTrailTab entityType="MEDICINE" entityId={id!} />}
     </div>
   );
 }

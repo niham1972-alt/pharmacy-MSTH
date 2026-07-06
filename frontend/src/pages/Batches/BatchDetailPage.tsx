@@ -7,6 +7,7 @@ import { batchesApi } from '../../features/batches/api/batches.api';
 import { BatchStatusBadge, ExpiryChip } from '../../features/batches/components/BatchStatusBadge';
 import { RecallFlagModal } from '../../features/batches/components/RecallFlagModal';
 import { WriteOffModal } from '../../features/batches/components/WriteOffModal';
+import { AuditTrailTab } from '../../features/audit-logs/components/AuditTrailTab';
 
 const CAN_RECALL = ['super_admin', 'admin', 'pharmacist'];
 const CAN_WRITE_OFF = ['super_admin', 'admin', 'inventory_manager'];
@@ -88,6 +89,11 @@ export function BatchDetailPage() {
           {data.writeOffs.map((w) => <p key={w.id} className="text-red-700 dark:text-red-400">🗑 Wrote off {w.quantity} — {w.disposalMethod} {w.disposalReference ? `(${w.disposalReference})` : ''} on {new Date(w.writtenOffAt).toLocaleDateString()}</p>)}
         </div>
       )}
+
+      <div className="mt-6">
+        <h2 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Audit Trail</h2>
+        <AuditTrailTab entityType="MEDICINE_BATCH" entityId={data.id} />
+      </div>
 
       {showRecall && <RecallFlagModal batch={data} onClose={() => setShowRecall(false)} onDone={() => { setShowRecall(false); refetch(); }} />}
       {showWriteOff && <WriteOffModal batches={[data]} onClose={() => setShowWriteOff(false)} onDone={() => { setShowWriteOff(false); refetch(); }} />}

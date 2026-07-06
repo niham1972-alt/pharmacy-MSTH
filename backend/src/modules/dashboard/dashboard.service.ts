@@ -263,7 +263,7 @@ export class DashboardService {
       id: r.id,
       action: r.action,
       entityType: r.entityType,
-      entityId: r.entityId,
+      entityId: r.entityId ?? '',
       userId: r.userId,
       createdAt: r.createdAt.toISOString(),
       metadata: r.metadata,
