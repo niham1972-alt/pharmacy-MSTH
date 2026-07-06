@@ -5,7 +5,8 @@
 // each module is built — reconcile via `prisma migrate` at that time.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
