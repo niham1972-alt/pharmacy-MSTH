@@ -21,6 +21,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let errorCode = 'INTERNAL_SERVER_ERROR';
+    // Real detail for server-side logs only — never leaked to the client.
+    let internalDetail = exception instanceof Error ? exception.message : String(exception);
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -32,12 +34,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = (b.message as string) ?? exception.message;
         errorCode = (b.errorCode as string) ?? this.defaultErrorCode(status);
       }
-    } else if (exception instanceof Error) {
-      message = exception.message;
+      internalDetail = message;
     }
+    // For anything that isn't a deliberate HttpException (raw Error, Prisma error,
+    // etc.) we keep the generic "Internal server error" message client-side so
+    // internal details (table/column names, stack info) never leak.
 
     if (status >= 500) {
-      this.logger.error(`${request.method} ${request.url} -> ${status}: ${message}`, (exception as Error)?.stack);
+      this.logger.error(`${request.method} ${request.url} -> ${status}: ${internalDetail}`, (exception as Error)?.stack);
     }
 
     const payload: ApiErrorResponse = {
