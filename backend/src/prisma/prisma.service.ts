@@ -1,8 +1,10 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger('PrismaService');
+
   constructor() {
     // Default interactive-transaction budget. The cross-module sale/GRN
     // transactions (Module 6 FEFO → per-batch Module 5 stock ledger writes) make
@@ -17,7 +19,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit(): Promise<void> {
-    await this.$connect();
+    // Do NOT crash the whole app if the DB is momentarily unreachable at boot
+    // (e.g. a transient Supabase pooler blip / network hiccup). Prisma reconnects
+    // lazily on the first query, so the server still starts, /api/health responds,
+    // and requests recover automatically once connectivity returns.
+    try {
+      await this.$connect();
+      this.logger.log('Connected to the database.');
+    } catch (err) {
+      this.logger.error(`Initial DB connection failed (will retry lazily per request): ${(err as Error).message}`);
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
