@@ -39,16 +39,16 @@ export function KpiCard({ label, value, formatValue, changePct, loading, error, 
 
   if (loading) {
     return (
-      <div className="animate-pulse rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-        <div className="h-3 w-24 rounded bg-gray-200 dark:bg-gray-700" />
-        <div className="mt-3 h-6 w-16 rounded bg-gray-200 dark:bg-gray-700" />
+      <div className="animate-pulse rounded-lg border border-gray-200 dark:border-gray-800 p-3">
+        <div className="h-2.5 w-20 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="mt-2.5 h-5 w-16 rounded bg-gray-200 dark:bg-gray-700" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div role="alert" className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 p-4">
+      <div role="alert" className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 p-3">
         <p className="text-xs font-medium text-red-700 dark:text-red-300">Couldn't load {label}</p>
         <button type="button" onClick={onRetry} className="mt-1 text-xs underline text-red-700 dark:text-red-300">
           Retry
@@ -62,21 +62,21 @@ export function KpiCard({ label, value, formatValue, changePct, loading, error, 
   return (
     <Wrapper
       onClick={onClick}
-      className={`rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 text-left ${
+      className={`w-full rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2.5 text-left ${
         onClick ? 'cursor-pointer transition hover:border-brand-500 hover:shadow-sm' : ''
       }`}
     >
-      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-100">
+      <p className="truncate text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500" title={label}>{label}</p>
+      <p className="mt-0.5 text-xl font-semibold leading-tight text-gray-900 dark:text-gray-100">
         {formatValue ? formatValue(animated) : Math.round(animated)}
       </p>
       {changePct !== undefined && (
         <p
-          className={`mt-1 text-xs font-medium ${
-            direction === 'up' ? 'text-green-600 dark:text-green-400' : direction === 'down' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'
+          className={`mt-0.5 text-[10px] ${
+            direction === 'up' ? 'text-green-600/80 dark:text-green-400/80' : direction === 'down' ? 'text-red-600/80 dark:text-red-400/80' : 'text-gray-400 dark:text-gray-500'
           }`}
         >
-          {formatPercentChange(changePct)} vs previous period
+          {formatPercentChange(changePct)} vs prev
         </p>
       )}
     </Wrapper>

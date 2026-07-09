@@ -75,8 +75,8 @@ export function KpiCardGrid() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="kpi-grid-loading">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4" data-testid="kpi-grid-loading">
+        {Array.from({ length: 8 }).map((_, i) => (
           <KpiCard key={i} label="" value={0} loading />
         ))}
       </div>
@@ -88,7 +88,7 @@ export function KpiCardGrid() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="kpi-grid">
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4" data-testid="kpi-grid">
       {cards.map((c) => (
         <KpiCard key={c.key} label={c.label} value={c.value} formatValue={c.format} changePct={c.changePct} onClick={c.onClick} />
       ))}
