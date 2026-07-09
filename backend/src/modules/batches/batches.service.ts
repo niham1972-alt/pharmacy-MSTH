@@ -332,6 +332,51 @@ export class BatchesService {
     });
   }
 
+  /**
+   * Restore RESALEABLE returned units (Module 10) into sellable inventory with a
+   * `SALES_RETURN` ledger reason. Rejoins the ORIGINAL batch when it still exists
+   * and is genuinely sellable — preserving the received→sold→returned→resold
+   * traceability chain. If the original batch is gone/expired/recalled (spec §21
+   * edge case), the units still go back to the aggregate stock but the line is
+   * flagged for inventory_manager review rather than silently crediting a defunct
+   * batch. Runs inside the caller's transaction. Returns per-item outcomes.
+   */
+  async restoreReturnedStock(
+    params: { pharmacyId: string; branchId: string; items: Array<{ medicineId: string; batchId: string | null; quantity: number }>; referenceId: string; performedBy: string; notes?: string },
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ medicineId: string; batchId: string | null; restoredToBatch: boolean; flaggedForReview: boolean }>> {
+    return this.run(tx, async (c) => {
+      const now = new Date();
+      const results: Array<{ medicineId: string; batchId: string | null; restoredToBatch: boolean; flaggedForReview: boolean }> = [];
+      for (const it of params.items) {
+        let restoredToBatch = false;
+        let flaggedForReview = false;
+        let ledgerBatchId = it.batchId ?? null;
+
+        if (it.batchId) {
+          const b = await c.medicineBatch.findUnique({ where: { id: it.batchId } });
+          const stillSellable = b && !b.isRecalled && b.expiryDate.getTime() > now.getTime();
+          if (stillSellable) {
+            const nextQty = b!.currentQuantity + it.quantity;
+            await c.medicineBatch.update({ where: { id: b!.id }, data: { currentQuantity: nextQty, status: this.computeStatus({ isRecalled: b!.isRecalled, currentQuantity: nextQty, expiryDate: b!.expiryDate }, now) } });
+            restoredToBatch = true;
+          } else {
+            // Original batch is defunct — don't credit it; restore to aggregate + flag.
+            ledgerBatchId = null;
+            flaggedForReview = true;
+          }
+        }
+
+        await this.inventory.recordStockIn(
+          { pharmacyId: params.pharmacyId, branchId: params.branchId, medicineId: it.medicineId, batchId: ledgerBatchId, quantity: it.quantity, reasonCode: 'SALES_RETURN', referenceModule: 'SALES_RETURN', referenceId: params.referenceId, performedBy: params.performedBy, notes: flaggedForReview ? `${params.notes ?? ''} [original batch defunct — review]`.trim() : params.notes },
+          c,
+        );
+        results.push({ medicineId: it.medicineId, batchId: it.batchId ?? null, restoredToBatch, flaggedForReview });
+      }
+      return results;
+    });
+  }
+
   /** Single enforcement point for the expired/recalled/depleted hard-block. */
   async isBatchSellable(params: { batchId: string }): Promise<boolean> {
     const b = await this.prisma.medicineBatch.findUnique({ where: { id: params.batchId } });

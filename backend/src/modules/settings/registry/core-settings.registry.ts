@@ -48,6 +48,14 @@ export const CORE_SETTINGS: SettingDefinitionInput[] = [
   { key: 'sales.voidWindowDays', label: 'Same-day void window (days)', description: 'Days a completed sale can be voided before it must be a return.', category: 'Sales', valueType: 'NUMBER', defaultValue: 1, validationRule: { min: 0, max: 30 } },
   { key: 'sales.session.cashVarianceThreshold', label: 'Session cash-variance review threshold', category: 'Sales', valueType: 'NUMBER', defaultValue: 100, validationRule: { min: 0 } },
 
+  // --- Sales Returns (Module 10) — controlled substances are ALWAYS blocked
+  //     in code (never a setting); these tune the softer policy knobs. --------
+  { key: 'returns.eligibilityWindowDays', label: 'Return eligibility window (days)', description: 'A sale can be returned within this many days of purchase.', category: 'Returns', valueType: 'NUMBER', defaultValue: 14, validationRule: { min: 0, max: 365 } },
+  { key: 'returns.nonReturnableCategories', label: 'Non-returnable categories', description: 'Medicines in these categories (by name) cannot be returned, on top of the always-blocked controlled substances.', category: 'Returns', valueType: 'JSON', defaultValue: [], validationRule: { stringArray: true } },
+  { key: 'returns.allowPrescriptionItemReturns', label: 'Allow returning prescription items', description: 'If off, any prescription-required item is non-returnable. If on, such returns still require pharmacist/admin approval.', category: 'Returns', valueType: 'BOOLEAN', defaultValue: true },
+  { key: 'returns.cashierCanProcessResaleable', label: 'Cashiers may process resaleable, non-sensitive returns', description: 'If off, every return needs pharmacist/admin approval.', category: 'Returns', valueType: 'BOOLEAN', defaultValue: true },
+  { key: 'returns.approvalRequiredReasons', label: 'Return reasons that force approval', description: 'Return reason codes that always require pharmacist/admin approval regardless of item type.', category: 'Returns', valueType: 'JSON', defaultValue: ['ADVERSE_REACTION'], validationRule: { stringArray: true } },
+
   // --- Customers (Module 8) ------------------------------------------------
   { key: 'customers.phone.regex', label: 'Phone number validation (regex)', category: 'Customers', valueType: 'STRING', defaultValue: '^[+\\d][\\d\\s\\-()]{4,24}$', validationRule: { maxLength: 200 } },
 

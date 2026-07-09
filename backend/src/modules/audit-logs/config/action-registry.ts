@@ -80,6 +80,15 @@ export const ACTION_REGISTRY: ActionDef[] = [
   { actionKey: 'CUSTOMERS_MERGED', label: 'Customers merged', module: 'Customers', defaultSeverity: 'SENSITIVE' },
   { actionKey: 'CUSTOMER_TAG_ASSIGNED', label: 'Customer tag assigned', module: 'Customers', defaultSeverity: 'ROUTINE' },
 
+  // Module 10 — Sales Returns
+  { actionKey: 'RETURN_ELIGIBILITY_CHECKED', label: 'Return eligibility checked', module: 'Sales Returns', defaultSeverity: 'ROUTINE' },
+  { actionKey: 'RETURN_CREATED', label: 'Sales return processed', module: 'Sales Returns', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'RETURN_APPROVAL_GRANTED', label: 'Return approval granted', module: 'Sales Returns', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'NON_RETURNABLE_ITEM_REJECTED', label: 'Non-returnable item rejected', module: 'Sales Returns', defaultSeverity: 'ROUTINE' },
+  { actionKey: 'RETURN_ITEM_QUARANTINED', label: 'Returned item quarantined (not resaleable)', module: 'Sales Returns', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'STORE_CREDIT_ISSUED', label: 'Store credit issued', module: 'Sales Returns', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'STORE_CREDIT_REDEEMED', label: 'Store credit redeemed', module: 'Sales Returns', defaultSeverity: 'SENSITIVE' },
+
   // Module 16 — Users & Roles (security-sensitive)
   { actionKey: 'USER_INVITED', label: 'User invited', module: 'Users', defaultSeverity: 'CRITICAL' },
   { actionKey: 'USER_ACTIVATED', label: 'User activated', module: 'Users', defaultSeverity: 'SENSITIVE' },

@@ -9,5 +9,6 @@ import { SalesEventsEmitter } from './events/sales-events.emitter';
 @Module({
   controllers: [SalesController, CashierSessionsController],
   providers: [SalesService, CashierSessionsService, SalesRepository, SalesEventsEmitter],
+  exports: [SalesService],
 })
 export class SalesModule {}

@@ -250,6 +250,21 @@ export class SalesService {
   }
 
   // -------------------------------------------------------------------------
+  // Narrow status transition owned by Module 4, called by Module 10 (Returns).
+  // A return NEVER edits Sale/SaleItem figures — only this status field moves
+  // (COMPLETED → PARTIALLY_RETURNED → FULLY_RETURNED), preserving the sale's
+  // immutable historical totals. Runs inside the return's transaction so the
+  // whole operation is atomic.
+  // -------------------------------------------------------------------------
+  async markReturnStatus(tx: Prisma.TransactionClient, pharmacyId: string, saleId: string, fullyReturned: boolean): Promise<void> {
+    const sale = await tx.sale.findFirst({ where: { id: saleId, pharmacyId }, select: { status: true } });
+    if (!sale) throw new NotFoundException({ errorCode: 'SALE_NOT_FOUND', message: 'Original sale not found' });
+    if (sale.status === 'VOIDED') throw new BadRequestException({ errorCode: 'SALE_VOIDED', message: 'A voided sale cannot be returned.' });
+    if (sale.status === 'FULLY_RETURNED') throw new BadRequestException({ errorCode: 'ALREADY_FULLY_RETURNED', message: 'This sale has already been fully returned.' });
+    await tx.sale.update({ where: { id: saleId }, data: { status: fullyReturned ? 'FULLY_RETURNED' : 'PARTIALLY_RETURNED' } });
+  }
+
+  // -------------------------------------------------------------------------
   // Queries (cashier auto-scoped to own sales)
   // -------------------------------------------------------------------------
   async list(user: AuthenticatedUser, q: { page?: number; limit?: number; search?: string; cashierId?: string; customerId?: string; status?: string; paymentMethod?: string; dateFrom?: string; dateTo?: string; branchId?: string }) {

@@ -18,6 +18,7 @@ export function SaleDetailPage() {
   if (isError || !sale) return <div className="text-center"><p className="text-sm text-red-600">Couldn't load sale.</p><button onClick={() => refetch()} className="mt-1 text-sm underline">Retry</button></div>;
 
   const canVoid = CAN_VOID.includes(user?.role ?? '') && sale.status === 'COMPLETED';
+  const canReturn = ['super_admin', 'admin', 'pharmacist', 'cashier'].includes(user?.role ?? '') && ['COMPLETED', 'PARTIALLY_RETURNED'].includes(sale.status);
   const doVoid = async () => {
     const reason = window.prompt('Reason for voiding this sale?');
     if (!reason) return;
@@ -34,7 +35,10 @@ export function SaleDetailPage() {
           <p className="text-sm text-gray-500">{new Date(sale.saleDate).toLocaleString()} · <span className={sale.status === 'VOIDED' ? 'text-red-600' : 'text-green-600'}>{sale.status.replace(/_/g, ' ')}</span></p>
           {sale.voidReason && <p className="text-xs text-red-500">Void reason: {sale.voidReason}</p>}
         </div>
-        {canVoid && <button onClick={doVoid} className="rounded-md border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm text-red-600">Void Sale</button>}
+        <div className="flex gap-2">
+          {canReturn && <Link to={`/sales-returns/new?saleId=${sale.id}`} className="rounded-md border border-brand-300 dark:border-brand-800 px-3 py-1.5 text-sm text-brand-700 dark:text-brand-400">Return Items</Link>}
+          {canVoid && <button onClick={doVoid} className="rounded-md border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm text-red-600">Void Sale</button>}
+        </div>
       </div>
 
       <table className="w-full text-left text-sm">

@@ -24,7 +24,7 @@ export function StepUpAuthModal({
   referenceModule: string;
   requiredRole: string;
   requiredRoleLabel: string;
-  onApproved: (verifiedByUserId: string) => void;
+  onApproved: (verifiedByUserId: string, stepUpId: string) => void;
   onCancel: () => void;
 }) {
   const [email, setEmail] = useState('');
@@ -39,7 +39,7 @@ export function StepUpAuthModal({
     try {
       const req = (await stepUpApi.request({ actionType, referenceModule, requiredRole })).data;
       const res = (await stepUpApi.verify(req.id, email.trim(), password)).data;
-      onApproved(res.verifiedByUserId);
+      onApproved(res.verifiedByUserId, req.id);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : 'Verification failed.');
     } finally {

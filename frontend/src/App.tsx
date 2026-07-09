@@ -39,6 +39,10 @@ import { UserDetailPage } from './pages/Users/UserDetailPage';
 import { PermissionMatrixPage } from './pages/Users/PermissionMatrixPage';
 import { MyProfilePage } from './pages/Users/MyProfilePage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
+import { ProcessReturnPage } from './pages/SalesReturns/ProcessReturnPage';
+import { SalesReturnsListPage } from './pages/SalesReturns/SalesReturnsListPage';
+import { SalesReturnDetailPage } from './pages/SalesReturns/SalesReturnDetailPage';
+import { ReturnRateReportsPage } from './pages/SalesReturns/ReturnRateReportsPage';
 import { AuditLogsListPage } from './pages/AuditLogs/AuditLogsListPage';
 import { SensitiveEventsPage } from './pages/AuditLogs/SensitiveEventsPage';
 import { UserActivityPage } from './pages/AuditLogs/UserActivityPage';
@@ -108,6 +112,20 @@ function UsersGate() {
   return <Outlet />;
 }
 
+/** Sales Returns: everyone except inventory_manager (spec §13). */
+function SalesReturnsGate() {
+  const { user } = useAuth();
+  if (user?.role === 'inventory_manager') return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
+/** Processing a return: admin/pharmacist/cashier only (accountant/auditor are read-only). */
+function ProcessReturnGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin', 'pharmacist', 'cashier'].includes(user?.role ?? '')) return <Navigate to="/sales-returns" replace />;
+  return <Outlet />;
+}
+
 /** Settings: admin (full), auditor (read-only), inventory_manager (Purchases only). */
 function SettingsGate() {
   const { user } = useAuth();
@@ -174,6 +192,14 @@ export default function App() {
           <Route path="/customers/merge" element={<MergeDuplicatesPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/customers/:id/edit" element={<CustomerFormPage />} />
+        </Route>
+        <Route element={<SalesReturnsGate />}>
+          <Route element={<ProcessReturnGate />}>
+            <Route path="/sales-returns/new" element={<ProcessReturnPage />} />
+          </Route>
+          <Route path="/sales-returns" element={<SalesReturnsListPage />} />
+          <Route path="/sales-returns/reports" element={<ReturnRateReportsPage />} />
+          <Route path="/sales-returns/:id" element={<SalesReturnDetailPage />} />
         </Route>
         <Route path="/my-profile" element={<MyProfilePage />} />
         <Route element={<SettingsGate />}>
