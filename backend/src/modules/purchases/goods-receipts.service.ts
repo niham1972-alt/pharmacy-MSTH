@@ -45,7 +45,7 @@ export class GoodsReceiptsService {
    */
   async confirmGrn(user: AuthenticatedUser, dto: CreateGrnDto) {
     const branchId = this.resolveBranch(user, dto.branchId);
-    const cfg = this.config.get();
+    const cfg = await this.config.get(user.pharmacyId, branchId);
     const isDirect = !dto.purchaseOrderId;
 
     // --- Pre-transaction validation -----------------------------------------

@@ -16,6 +16,7 @@ import { BatchesModule } from './modules/batches/batches.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -41,6 +42,7 @@ import { HealthController } from './health/health.controller';
     SuppliersModule,
     UsersModule,
     AuditLogsModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

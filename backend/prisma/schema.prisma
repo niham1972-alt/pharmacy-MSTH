@@ -1152,3 +1152,65 @@ model StepUpVerification {
   @@index([requestedByUserId])
   @@index([status])
 }
+
+// ---------------------------------------------------------------------------
+// Module 18: Settings & System Configuration — the central, cached config store
+// every module reads via SettingsService.get(). Flexible key/value so future
+// modules add settings without a migration. Resolution: branch override →
+// pharmacy-wide value → SettingDefinition.defaultValue. Key convention:
+// module.category.settingName (e.g. sales.discount.autoApprovedPercent).
+// ---------------------------------------------------------------------------
+enum SettingValueType {
+  STRING
+  NUMBER
+  BOOLEAN
+  ENUM
+  JSON
+}
+
+enum SettingScope {
+  PHARMACY
+  BRANCH
+}
+
+model SettingDefinition {
+  id             String           @id @default(uuid())
+  key            String           @unique
+  label          String
+  description    String?
+  category       String
+  valueType      SettingValueType
+  defaultValue   Json
+  validationRule Json?
+  scope          SettingScope     @default(PHARMACY)
+  isSensitive    Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+
+  @@index([category])
+}
+
+model SettingValue {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  branchId   String? // null = pharmacy-wide; non-null = branch override
+  settingKey String
+  value      Json
+  updatedBy  String
+  updatedAt  DateTime @updatedAt
+
+  @@unique([pharmacyId, branchId, settingKey])
+  @@index([pharmacyId, settingKey])
+}
+
+model SettingChangeHistory {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  branchId   String?
+  settingKey String
+  oldValue   Json?
+  newValue   Json
+  changedBy  String
+  changedAt  DateTime @default(now())
+
+  @@index([pharmacyId, settingKey, changedAt])
+}

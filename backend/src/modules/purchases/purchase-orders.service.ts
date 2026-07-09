@@ -233,7 +233,7 @@ export class PurchaseOrdersService {
     if (po.status !== 'DRAFT') throw new ConflictException({ errorCode: 'INVALID_TRANSITION', message: 'Only DRAFT POs can be submitted.' });
     if (po.items.length === 0) throw new BadRequestException({ errorCode: 'EMPTY_PO', message: 'Add at least one line item before submitting.' });
 
-    const { autoApproveThreshold } = this.config.get();
+    const { autoApproveThreshold } = await this.config.get(user.pharmacyId, po.branchId);
     const autoApprove = dec(po.grandTotal) <= autoApproveThreshold;
 
     await this.prisma.purchaseOrder.update({

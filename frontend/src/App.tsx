@@ -38,6 +38,7 @@ import { UsersListPage } from './pages/Users/UsersListPage';
 import { UserDetailPage } from './pages/Users/UserDetailPage';
 import { PermissionMatrixPage } from './pages/Users/PermissionMatrixPage';
 import { MyProfilePage } from './pages/Users/MyProfilePage';
+import { SettingsPage } from './pages/Settings/SettingsPage';
 import { AuditLogsListPage } from './pages/AuditLogs/AuditLogsListPage';
 import { SensitiveEventsPage } from './pages/AuditLogs/SensitiveEventsPage';
 import { UserActivityPage } from './pages/AuditLogs/UserActivityPage';
@@ -107,6 +108,13 @@ function UsersGate() {
   return <Outlet />;
 }
 
+/** Settings: admin (full), auditor (read-only), inventory_manager (Purchases only). */
+function SettingsGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin', 'auditor', 'inventory_manager'].includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
 /** Audit Log: admin/auditor only for the global log (spec §13). */
 function AuditGate() {
   const { user } = useAuth();
@@ -168,6 +176,9 @@ export default function App() {
           <Route path="/customers/:id/edit" element={<CustomerFormPage />} />
         </Route>
         <Route path="/my-profile" element={<MyProfilePage />} />
+        <Route element={<SettingsGate />}>
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
         <Route element={<UsersGate />}>
           <Route path="/users" element={<UsersListPage />} />
           <Route path="/users/permission-matrix" element={<PermissionMatrixPage />} />

@@ -274,6 +274,21 @@ Endpoints (base `/api/audit-logs`, admin/auditor for the global log): `GET /` (f
 
 **`AuditTrailTab` + `useEntityAuditTrail`** (`features/audit-logs`) is the reusable component **now embedded in Module 2 (Medicine), 6 (Batch) and 7 (Supplier) detail pages** — the shared infra those modules assumed. `MetadataDetailView` renders the common `{ before, after }` / `{ changes }` shapes as a clean diff. Frontend pages: Global log (filters + integrity banner + CSV export), Sensitive Events feed, User Activity.
 
+## Module 18: Settings & System Configuration — the central config store (integration-completion)
+
+The one place business rules live. Migration `20260711000000_settings_module` **adds** (no reset — pure additions) `SettingDefinition` (the in-code registry mirrored to the DB), `SettingValue` (pharmacy/branch overrides) and `SettingChangeHistory`, plus `SettingValueType`/`SettingScope` enums. Modules that used to hardcode constants (or read `process.env`) now read live values through `SettingsService.get()`.
+
+**Key-naming convention: `module.category.settingName`** (e.g. `sales.discount.autoApprovedPercent`, `purchases.approval.thresholdAmount`, `dashboard.alerts.expiryTiers`). Every setting is declared once in `modules/settings/registry/core-settings.registry.ts` with its `valueType`, `defaultValue`, `validationRule` and `scope` — that registry is the single source of truth and is idempotently upserted into `SettingDefinition` at boot. Add a setting there and it gets a validated API + a type-driven UI control with zero bespoke code.
+
+**Resolution chain (most specific wins):** branch override (`SettingValue` with `branchId = X`) → pharmacy-wide (`branchId = NULL`) → `SettingDefinition.defaultValue` from the registry. `scope: BRANCH` settings may be overridden per branch; `scope: PHARMACY` settings reject a `branchId` (`NOT_BRANCH_SCOPED`). Reads are cached in-process (5-min safety TTL) with **precise invalidation** on every `set`/`reset`, so a changed rule takes effect on the very next request. If the DB is momentarily unreachable, `get()` falls back to the registry default rather than throwing into a caller's hot path.
+> ⚠️ Resolution reads use `OR: [{ branchId }, { branchId: null }]`, **not** `branchId: { in: [..., null] }` — Prisma compiles `in: [null]` to SQL `IN (NULL)`, which matches no rows and would silently return the default for every override. (Caught by the E2E; the only place this pattern appears.)
+
+**Validation** is per-`valueType` (NUMBER min/max, ENUM allowedValues, STRING maxLength, JSON shape) plus cross-field rules: paired thresholds (`lessThanOrEqualKey`, e.g. cost-variance *warn* ≤ *block*) and ascending expiry tiers (`red < orange < yellow`, the canonical set shared with Module 6 Batches). Every change is written to `SettingChangeHistory` **and** the Module 15 audit trail as a `SENSITIVE` `SETTING_CHANGED` event.
+
+**Live wiring (verified E2E):** Module 4 Sales reads `sales.discount.autoApprovedPercent` / `sales.allowNegativeStock` / `sales.voidWindowDays`; Module 3 Purchases reads the approval/tolerance/variance/costing settings via `PurchaseConfigService`. Changing the discount threshold to 50% lets a cashier's 10%-discount sale complete on the *next* request with no restart — the headline acceptance test.
+
+Endpoints (base `/api/settings`): `GET /` (grouped, resolved, sensitive values masked), `GET /definitions`, `GET /:key` (+ `?branchId=`), `GET /:key/history`, `PUT /:key`, `POST /:key/reset`. **Read:** admin/super_admin/auditor. **Write:** admin/super_admin; `inventory_manager` is narrowed to Purchases-category settings only. Frontend: `pages/Settings/SettingsPage.tsx` — categorized nav + global search, `SettingField` renders the right control purely from `valueType` (toggle / number / select / text / `ExpiryTiersEditor`), with save-on-blur, per-setting reset (↺) and a change-history modal.
+
 ## Role-permission matrix
 
 | Widget | super_admin/admin | pharmacist | inventory_manager | cashier | accountant | auditor |

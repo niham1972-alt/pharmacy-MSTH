@@ -6,6 +6,7 @@ import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.in
 import { SalesRepository } from './sales.repository';
 import { SalesEventsEmitter } from './events/sales-events.emitter';
 import { BatchesService } from '../batches/batches.service';
+import { SettingsService } from '../settings/settings.service';
 import { computeCart, LineInput } from './cart-calculations.util';
 import { FinalizeSaleDto, ParkSaleDto, PriceCheckDto, VoidSaleDto } from './dto/sales.dto';
 
@@ -15,9 +16,8 @@ function dec(v: Prisma.Decimal | number | null | undefined): number {
 }
 
 const ELEVATED = ['admin', 'super_admin', 'pharmacist'];
-const ALLOW_NEGATIVE_STOCK = process.env.ALLOW_NEGATIVE_STOCK === 'true';
-const AUTO_DISCOUNT_PCT = Number(process.env.POS_AUTO_DISCOUNT_PCT ?? 5);
-const VOID_WINDOW_DAYS = Number(process.env.POS_VOID_WINDOW_DAYS ?? 1);
+// Negative-stock policy, auto-approved discount %, and the void window are now
+// sourced live from Module 18 Settings (canonical, admin-editable) rather than env.
 
 @Injectable()
 export class SalesService {
@@ -27,6 +27,7 @@ export class SalesService {
     private readonly audit: AuditLogService,
     private readonly events: SalesEventsEmitter,
     private readonly batches: BatchesService,
+    private readonly settings: SettingsService,
   ) {}
 
   private branch(user: AuthenticatedUser, requested?: string): string {
@@ -45,12 +46,13 @@ export class SalesService {
     // FEFO preview via Module 6 — the soonest *sellable* batch (excludes expired
     // and recalled) that a sale would draw from.
     const fefoBatch = await this.batches.previewFefoBatches(user.pharmacyId, branchId, medIds);
+    const allowNegative = await this.settings.get<boolean>('sales.allowNegativeStock', { pharmacyId: user.pharmacyId, branchId });
 
     const lines = dto.items.map((it) => {
       const m = meds.get(it.medicineId)!;
       const unitPrice = this.resolvePrice(user, it, m);
       const line: LineInput = { unitPrice, quantity: it.quantity, discountAmount: it.discountAmount ?? 0, taxRatePercent: dec(m.taxRatePercent), taxInclusive: m.taxInclusive, unitCost: dec(m.costPrice) };
-      const stockOk = ALLOW_NEGATIVE_STOCK || m.currentStock >= it.quantity;
+      const stockOk = allowNegative || m.currentStock >= it.quantity;
       return { medicineId: it.medicineId, name: m.brandName ?? m.genericName, unitPrice, currentStock: m.currentStock, stockOk, prescriptionRequired: m.prescriptionRequired, controlled: !!m.controlledSubstanceSchedule, discontinued: m.status === 'DISCONTINUED', fefoBatch: fefoBatch.get(it.medicineId) ?? null, line };
     });
     const { totals } = computeCart(lines.map((l) => l.line));
@@ -78,6 +80,11 @@ export class SalesService {
 
     const meds = await this.loadMedicines(user.pharmacyId, dto.items.map((i) => i.medicineId));
 
+    // Live business rules from Module 18 Settings (branch override → pharmacy → default).
+    const cfg = await this.settings.getMany(['sales.discount.autoApprovedPercent', 'sales.allowNegativeStock'], { pharmacyId: user.pharmacyId, branchId });
+    const autoDiscountPct = cfg['sales.discount.autoApprovedPercent'] as number;
+    const allowNegative = cfg['sales.allowNegativeStock'] as boolean;
+
     // Build snapshot lines + enforce prescription / controlled-substance gating.
     const lineInputs: LineInput[] = [];
     for (const it of dto.items) {
@@ -96,8 +103,8 @@ export class SalesService {
 
     // Discount cap: cashiers need elevated approval beyond the auto-allowed %.
     const discountPct = totals.subTotal > 0 ? (totals.discountTotal / (totals.subTotal + totals.discountTotal)) * 100 : 0;
-    if (!ELEVATED.includes(user.role) && discountPct > AUTO_DISCOUNT_PCT && !dto.discountApprovedBy) {
-      throw new BadRequestException({ errorCode: 'DISCOUNT_NOT_APPROVED', message: `A ${discountPct.toFixed(1)}% discount exceeds the ${AUTO_DISCOUNT_PCT}% limit and needs manager approval.` });
+    if (!ELEVATED.includes(user.role) && discountPct > autoDiscountPct && !dto.discountApprovedBy) {
+      throw new BadRequestException({ errorCode: 'DISCOUNT_NOT_APPROVED', message: `A ${discountPct.toFixed(1)}% discount exceeds the ${autoDiscountPct}% limit and needs manager approval.` });
     }
 
     // Payments must sum exactly to grand total (Decimal-precise).
@@ -114,7 +121,7 @@ export class SalesService {
       const fresh = await tx.medicine.findMany({ where: { id: { in: ids } }, select: { id: true, currentStock: true } });
       const stockOf = new Map(fresh.map((f) => [f.id, f.currentStock]));
       for (const it of dto.items) {
-        if (!ALLOW_NEGATIVE_STOCK && (stockOf.get(it.medicineId) ?? 0) < it.quantity) {
+        if (!allowNegative && (stockOf.get(it.medicineId) ?? 0) < it.quantity) {
           throw new BadRequestException({ errorCode: 'STOCK_CHANGED_SINCE_CHECK', message: `Insufficient stock for ${meds.get(it.medicineId)?.brandName ?? meds.get(it.medicineId)?.genericName}. Available: ${stockOf.get(it.medicineId) ?? 0}.` });
         }
       }
@@ -223,7 +230,8 @@ export class SalesService {
     if (!sale) throw new NotFoundException({ errorCode: 'SALE_NOT_FOUND', message: 'Sale not found' });
     if (sale.status !== 'COMPLETED') throw new BadRequestException({ errorCode: 'NOT_VOIDABLE', message: `A ${sale.status} sale cannot be voided.` });
     const ageDays = (Date.now() - sale.saleDate.getTime()) / 86400000;
-    if (ageDays > VOID_WINDOW_DAYS) throw new BadRequestException({ errorCode: 'VOID_WINDOW_EXPIRED', message: 'Past the void window — process this as a return (Module 10).' });
+    const voidWindowDays = await this.settings.get<number>('sales.voidWindowDays', { pharmacyId: sale.pharmacyId, branchId: sale.branchId });
+    if (ageDays > voidWindowDays) throw new BadRequestException({ errorCode: 'VOID_WINDOW_EXPIRED', message: 'Past the void window — process this as a return (Module 10).' });
 
     await this.prisma.$transaction(async (tx) => {
       // Module 6 restores each batch's quantity + records the offsetting Module 5

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { SettingsService } from '../settings/settings.service';
 
 export type CostingRule = 'LATEST_COST' | 'WEIGHTED_AVERAGE' | 'MANUAL_ONLY';
 
@@ -12,28 +12,25 @@ export interface PurchaseConfig {
 }
 
 /**
- * Purchase business rules. These belong to Settings (Module 18) — sourced from
- * env vars with sane defaults for now, never hardcoded in service logic
- * (spec §22). Swapping this for a per-pharmacy Settings lookup is a one-method
- * change with no call-site impact.
+ * Purchase business rules, now resolved LIVE from Module 18 Settings (per-pharmacy,
+ * per-branch, admin-editable) instead of env vars. The approval threshold is a
+ * BRANCH-scoped setting; the rest are pharmacy-wide.
  */
 @Injectable()
 export class PurchaseConfigService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly settings: SettingsService) {}
 
-  get(): PurchaseConfig {
+  async get(pharmacyId: string, branchId?: string): Promise<PurchaseConfig> {
+    const s = await this.settings.getMany(
+      ['purchases.approval.thresholdAmount', 'purchases.receipt.overReceiptTolerancePercent', 'purchases.variance.warnPercent', 'purchases.variance.blockPercent', 'purchases.costingRule'],
+      { pharmacyId, branchId },
+    );
     return {
-      autoApproveThreshold: this.num('PO_AUTO_APPROVE_THRESHOLD', 50000),
-      overReceiptTolerancePercent: this.num('PO_OVER_RECEIPT_TOLERANCE_PCT', 0),
-      varianceWarnPercent: this.num('PO_VARIANCE_WARN_PCT', 10),
-      varianceBlockPercent: this.num('PO_VARIANCE_BLOCK_PCT', 50),
-      costingRule: (this.config.get<string>('PO_COSTING_RULE') as CostingRule) ?? 'LATEST_COST',
+      autoApproveThreshold: s['purchases.approval.thresholdAmount'] as number,
+      overReceiptTolerancePercent: s['purchases.receipt.overReceiptTolerancePercent'] as number,
+      varianceWarnPercent: s['purchases.variance.warnPercent'] as number,
+      varianceBlockPercent: s['purchases.variance.blockPercent'] as number,
+      costingRule: s['purchases.costingRule'] as CostingRule,
     };
-  }
-
-  private num(key: string, fallback: number): number {
-    const raw = this.config.get<string>(key);
-    const n = raw !== undefined ? Number(raw) : NaN;
-    return Number.isFinite(n) ? n : fallback;
   }
 }
