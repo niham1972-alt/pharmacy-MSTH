@@ -86,16 +86,18 @@ function InviteModal({ onClose, onDone }: { onClose: () => void; onDone: (id?: s
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('CASHIER');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const input = 'w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm';
+  const passwordInvalid = password.length > 0 && password.length < 8;
 
   const submit = async () => {
-    if (name.trim().length < 2 || !email.trim()) return;
+    if (name.trim().length < 2 || !email.trim() || passwordInvalid) return;
     setBusy(true); setError(null);
     try {
-      const res = (await usersApi.invite({ name: name.trim(), email: email.trim(), role })).data;
+      const res = (await usersApi.invite({ name: name.trim(), email: email.trim(), role, password: password || undefined })).data;
       setNote(res.note);
       setTimeout(() => onDone(res.id), 1200);
     } catch (e) {
@@ -112,11 +114,13 @@ function InviteModal({ onClose, onDone }: { onClose: () => void; onDone: (id?: s
         {note && <div className="mb-2 rounded-md border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950 px-3 py-2 text-sm text-green-700 dark:text-green-300">Invited ✓ {note}</div>}
         <label className="mb-2 block"><span className="text-xs text-gray-500">Name *</span><input value={name} onChange={(e) => setName(e.target.value)} className={input} /></label>
         <label className="mb-2 block"><span className="text-xs text-gray-500">Email *</span><input value={email} onChange={(e) => setEmail(e.target.value)} className={input} /></label>
-        <label className="mb-4 block"><span className="text-xs text-gray-500">Role *</span><select value={role} onChange={(e) => setRole(e.target.value)} className={input}>{SYSTEM_ROLES.filter((r) => r !== 'SUPER_ADMIN').map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></label>
-        <p className="mb-3 text-xs text-gray-400">The user is granted access to your current branch. Adjust roles/branches on their profile after inviting.</p>
+        <label className="mb-2 block"><span className="text-xs text-gray-500">Role *</span><select value={role} onChange={(e) => setRole(e.target.value)} className={input}>{SYSTEM_ROLES.filter((r) => r !== 'SUPER_ADMIN').map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></label>
+        <label className="mb-1 block"><span className="text-xs text-gray-500">Initial password (optional)</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to send a set-up link" autoComplete="new-password" className={input} /></label>
+        {passwordInvalid && <p className="mb-1 text-xs text-red-600">Password must be at least 8 characters.</p>}
+        <p className="mb-3 text-xs text-gray-400">Set a password to let them sign in right away, or leave it blank and set one later. Access is your current branch; adjust roles/branches on their profile after inviting.</p>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm">Cancel</button>
-          <button onClick={submit} disabled={busy || name.trim().length < 2 || !email.trim()} className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? 'Inviting…' : 'Send Invite'}</button>
+          <button onClick={submit} disabled={busy || name.trim().length < 2 || !email.trim() || passwordInvalid} className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? 'Inviting…' : 'Send Invite'}</button>
         </div>
       </div>
     </div>

@@ -93,6 +93,7 @@ export const ACTION_REGISTRY: ActionDef[] = [
   { actionKey: 'USER_INVITED', label: 'User invited', module: 'Users', defaultSeverity: 'CRITICAL' },
   { actionKey: 'USER_ACTIVATED', label: 'User activated', module: 'Users', defaultSeverity: 'SENSITIVE' },
   { actionKey: 'USER_UPDATED', label: 'User updated', module: 'Users', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'USER_PASSWORD_SET', label: 'User password set/reset', module: 'Users', defaultSeverity: 'CRITICAL' },
   { actionKey: 'ROLE_ASSIGNED', label: 'Role assigned', module: 'Users', defaultSeverity: 'CRITICAL' },
   { actionKey: 'ROLE_REMOVED', label: 'Role removed', module: 'Users', defaultSeverity: 'CRITICAL' },
   { actionKey: 'BRANCH_ACCESS_GRANTED', label: 'Branch access granted', module: 'Users', defaultSeverity: 'SENSITIVE' },

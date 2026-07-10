@@ -57,6 +57,14 @@ export class SupabaseAdminService {
     if (!res.ok) throw new BadRequestException({ errorCode: 'CLAIMS_SYNC_FAILED', message: `Could not sync claims: ${await res.text()}` });
   }
 
+  /** Set/reset a user's password (admin action). Supabase Auth stores it. */
+  async setPassword(authUserId: string, password: string): Promise<void> {
+    if (authUserId.startsWith('seed-')) throw new BadRequestException({ errorCode: 'NOT_A_REAL_AUTH_USER', message: 'This is a demo/seed account and has no Supabase login to set a password for.' });
+    const { url } = this.base();
+    const res = await fetch(`${url}/auth/v1/admin/users/${authUserId}`, { method: 'PUT', headers: this.headers(), body: JSON.stringify({ password }) });
+    if (!res.ok) throw new BadRequestException({ errorCode: 'PASSWORD_SET_FAILED', message: `Could not set the password: ${await res.text()}` });
+  }
+
   /** Force logout: invalidates the user's refresh tokens at the Supabase level. */
   async revokeSessions(authUserId: string): Promise<void> {
     if (authUserId.startsWith('seed-')) return;

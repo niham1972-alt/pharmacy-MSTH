@@ -6,7 +6,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ControllerResult } from '../../common/interceptors/response-envelope.interceptor';
 import { UsersService } from './users.service';
-import { AssignRoleDto, GrantBranchAccessDto, GrantOverrideDto, InviteUserDto, UpdateUserDto } from './dto/users.dto';
+import { AssignRoleDto, GrantBranchAccessDto, GrantOverrideDto, InviteUserDto, SetPasswordDto, UpdateUserDto } from './dto/users.dto';
 
 const MANAGE = ['super_admin', 'admin'] as const;
 
@@ -58,6 +58,12 @@ export class UsersController {
   @Roles(...MANAGE)
   async update(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: UpdateUserDto): Promise<ControllerResult<unknown>> {
     return { data: await this.users.update(user, id, dto), message: 'User updated' };
+  }
+
+  @Post(':id/set-password')
+  @Roles(...MANAGE)
+  async setPassword(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: SetPasswordDto): Promise<ControllerResult<unknown>> {
+    return { data: await this.users.setPassword(user, id, dto.password), message: 'Password set' };
   }
 
   @Post(':id/roles')

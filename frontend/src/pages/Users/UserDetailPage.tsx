@@ -12,6 +12,7 @@ export function UserDetailPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Roles & Branches');
   const [err, setErr] = useState<string | null>(null);
   const [newRole, setNewRole] = useState('PHARMACIST');
+  const [showPwd, setShowPwd] = useState(false);
   const { data: u, isLoading, isError, refetch } = useQuery({ queryKey: ['users', 'detail', id], queryFn: async () => (await usersApi.detail(id!)).data, enabled: !!id });
   const activity = useQuery({ queryKey: ['users', 'activity', id], queryFn: async () => (await usersApi.loginActivity(id!)).data, enabled: !!id && tab === 'Login Activity' });
 
@@ -33,6 +34,7 @@ export function UserDetailPage() {
           <p className="mt-1 flex items-center gap-2 text-sm text-gray-500">{u.email} <UserStatusBadge status={u.status} /></p>
         </div>
         <div className="flex gap-2">
+          {u.status !== 'DEACTIVATED' && <button onClick={() => setShowPwd(true)} className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm">Set password</button>}
           {u.status === 'ACTIVE' && <button onClick={() => act(() => usersApi.suspend(u.id), 'Suspend this user? They will be unable to log in; historical records stay intact.')} className="rounded-md border border-orange-300 dark:border-orange-800 px-3 py-1.5 text-sm text-orange-700 dark:text-orange-400">Suspend</button>}
           {u.status === 'SUSPENDED' && <button onClick={() => act(() => usersApi.reactivate(u.id))} className="rounded-md border border-green-300 dark:border-green-800 px-3 py-1.5 text-sm text-green-700 dark:text-green-400">Reactivate</button>}
           {u.status !== 'DEACTIVATED' && <button onClick={() => act(() => usersApi.deactivate(u.id), 'Deactivate (offboard) this user? This blocks login permanently; historical records stay attributed.')} className="rounded-md border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm text-red-700 dark:text-red-400">Deactivate</button>}
@@ -93,6 +95,44 @@ export function UserDetailPage() {
           </table>
         </div>
       )}
+
+      {showPwd && <SetPasswordModal userId={u.id} userName={u.name} pending={u.status === 'PENDING_ACTIVATION'} onClose={() => setShowPwd(false)} onDone={() => { setShowPwd(false); refetch(); }} />}
+    </div>
+  );
+}
+
+function SetPasswordModal({ userId, userName, pending, onClose, onDone }: { userId: string; userName: string; pending: boolean; onClose: () => void; onDone: () => void }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const input = 'w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm';
+  const tooShort = password.length > 0 && password.length < 8;
+  const mismatch = confirm.length > 0 && password !== confirm;
+  const canSave = password.length >= 8 && password === confirm && !busy;
+
+  const submit = async () => {
+    if (!canSave) return;
+    setBusy(true); setError(null);
+    try { await usersApi.setPassword(userId, password); onDone(); }
+    catch (e) { setError(e instanceof ApiClientError ? e.message : 'Could not set the password.'); setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+      <div className="w-full max-w-sm rounded-lg bg-white dark:bg-gray-900 p-5 shadow-xl">
+        <h2 className="mb-1 text-lg font-semibold text-gray-900 dark:text-gray-100">Set password</h2>
+        <p className="mb-3 text-xs text-gray-500">For <span className="font-medium">{userName}</span>. {pending ? 'This will also activate their account.' : 'Existing sessions stay valid — use “Revoke Sessions” to force re-login.'}</p>
+        {error && <div role="alert" className="mb-2 rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</div>}
+        <label className="mb-2 block"><span className="text-xs text-gray-500">New password (min 8)</span><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={input} autoFocus /></label>
+        <label className="mb-1 block"><span className="text-xs text-gray-500">Confirm password</span><input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} className={input} /></label>
+        {tooShort && <p className="mb-1 text-xs text-red-600">Must be at least 8 characters.</p>}
+        {mismatch && <p className="mb-1 text-xs text-red-600">Passwords don't match.</p>}
+        <div className="mt-3 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm">Cancel</button>
+          <button onClick={submit} disabled={!canSave} className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? 'Saving…' : 'Set password'}</button>
+        </div>
+      </div>
     </div>
   );
 }

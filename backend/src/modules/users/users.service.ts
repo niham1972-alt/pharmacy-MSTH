@@ -111,20 +111,46 @@ export class UsersService {
     const branchIds = dto.branchIds && dto.branchIds.length ? dto.branchIds : role === 'SUPER_ADMIN' ? [] : [user.branchId];
     if (role !== 'SUPER_ADMIN' && branchIds.length === 0) throw new BadRequestException({ errorCode: 'BRANCH_REQUIRED', message: 'At least one branch is required for this role.' });
 
-    const claims = { role: ROLE_CLAIM[role], pharmacyId: user.pharmacyId, branchId: dto.defaultBranchId ?? branchIds[0] ?? '', accessibleBranchIds: branchIds, status: 'PENDING_ACTIVATION' };
-    const { authUserId, alreadyExisted } = await this.supabase.createUser({ email: dto.email, appMetadata: claims });
+    // A given password means the user can sign in right away → create them ACTIVE.
+    const initialStatus = dto.password ? 'ACTIVE' : 'PENDING_ACTIVATION';
+    const claims = { role: ROLE_CLAIM[role], pharmacyId: user.pharmacyId, branchId: dto.defaultBranchId ?? branchIds[0] ?? '', accessibleBranchIds: branchIds, status: initialStatus };
+    const { authUserId, alreadyExisted } = await this.supabase.createUser({ email: dto.email, appMetadata: claims, password: dto.password });
 
     const created = await this.prisma.user.create({
       data: {
         pharmacyId: user.pharmacyId, authUserId, name: dto.name, email: dto.email, phone: dto.phone, employeeId: dto.employeeId,
-        status: 'PENDING_ACTIVATION', createdBy: user.userId,
+        status: initialStatus, createdBy: user.userId,
         roles: { create: [{ role, assignedBy: user.userId }] },
         branchAccess: { create: branchIds.map((b, i) => ({ branchId: b, isDefault: dto.defaultBranchId ? b === dto.defaultBranchId : i === 0, grantedBy: user.userId })) },
       },
     });
-    await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'USER_INVITED', entityType: 'USER', entityId: created.id, metadata: { email: dto.email, role, alreadyExisted } });
+    await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'USER_INVITED', entityType: 'USER', entityId: created.id, metadata: { email: dto.email, role, alreadyExisted, passwordSet: !!dto.password } });
+    if (dto.password && !alreadyExisted) {
+      await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'USER_PASSWORD_SET', entityType: 'USER', entityId: created.id, metadata: { atInvite: true } });
+    }
     this.events.invited({ pharmacyId: user.pharmacyId, userId: created.id });
-    return { id: created.id, authUserId, alreadyExisted, note: alreadyExisted ? 'Linked to an existing Supabase auth identity.' : 'Auth user created. Send them a password-set link (Supabase invite) to activate.' };
+    const note = alreadyExisted
+      ? 'Linked to an existing Supabase auth identity.'
+      : dto.password
+        ? 'Auth user created with the given password — they can sign in now.'
+        : 'Auth user created. Set a password (below, or via a Supabase reset link) so they can sign in.';
+    return { id: created.id, authUserId, alreadyExisted, note };
+  }
+
+  /** Admin sets or resets a user's login password (Supabase Auth owns storage). */
+  async setPassword(user: AuthenticatedUser, id: string, password: string) {
+    const u = await this.ensure(user, id);
+    if (u.status === 'DEACTIVATED') throw new BadRequestException({ errorCode: 'USER_DEACTIVATED', message: 'Reactivate this user before setting a password.' });
+    await this.supabase.setPassword(u.authUserId, password);
+    // A pending user with a password can now sign in → mark them active.
+    if (u.status === 'PENDING_ACTIVATION') {
+      await this.prisma.user.update({ where: { id }, data: { status: 'ACTIVE' } });
+      await this.syncClaims(id, user.pharmacyId);
+      this.events.activated({ pharmacyId: user.pharmacyId, userId: id });
+    }
+    // Never log the password itself — only that it changed.
+    await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'USER_PASSWORD_SET', entityType: 'USER', entityId: id, metadata: { atInvite: false } });
+    return { id, updated: true };
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateUserDto) {
