@@ -163,6 +163,7 @@ export class UsersService {
   async assignRole(user: AuthenticatedUser, id: string, dto: AssignRoleDto) {
     await this.ensure(user, id);
     await this.prisma.userRoleAssignment.upsert({ where: { userId_role: { userId: id, role: dto.role as SystemRole } }, update: {}, create: { userId: id, role: dto.role as SystemRole, assignedBy: user.userId } });
+    this.authz.invalidate(id);
     await this.syncClaims(id, user.pharmacyId);
     await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'ROLE_ASSIGNED', entityType: 'USER', entityId: id, metadata: { role: dto.role } });
     return this.detail(user, id);
@@ -173,6 +174,7 @@ export class UsersService {
     const count = await this.prisma.userRoleAssignment.count({ where: { userId: id } });
     if (count <= 1) throw new BadRequestException({ errorCode: 'LAST_ROLE', message: 'A user must have at least one role. Assign a replacement role before removing this one.' });
     await this.prisma.userRoleAssignment.deleteMany({ where: { userId: id, role: role as SystemRole } });
+    this.authz.invalidate(id);
     await this.syncClaims(id, user.pharmacyId);
     await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'ROLE_REMOVED', entityType: 'USER', entityId: id, metadata: { role } });
     return this.detail(user, id);
@@ -252,24 +254,63 @@ export class UsersService {
   // =========================================================================
   // Permission overrides / matrix
   // =========================================================================
-  async grantOverride(user: AuthenticatedUser, id: string, dto: GrantOverrideDto) {
+  /** Grant or revoke a specific permission for a user (spec §2). */
+  async setOverride(user: AuthenticatedUser, id: string, dto: GrantOverrideDto) {
     await this.ensure(user, id);
     if (!isKnownPermissionKey(dto.permissionKey)) throw new BadRequestException({ errorCode: 'UNKNOWN_PERMISSION_KEY', message: `Unknown permission key "${dto.permissionKey}".` });
+    const effect = (dto.effect ?? 'GRANT') as 'GRANT' | 'REVOKE';
     await this.prisma.userPermissionOverride.upsert({
       where: { userId_permissionKey: { userId: id, permissionKey: dto.permissionKey } },
-      update: { reason: dto.reason, expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null },
-      create: { userId: id, permissionKey: dto.permissionKey, grantedBy: user.userId, reason: dto.reason, expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null },
+      update: { effect, reason: dto.reason, grantedBy: user.userId, expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null },
+      create: { userId: id, permissionKey: dto.permissionKey, effect, grantedBy: user.userId, reason: dto.reason, expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null },
     });
-    await this.syncClaims(id, user.pharmacyId);
-    await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'PERMISSION_OVERRIDE_GRANTED', entityType: 'USER', entityId: id, metadata: { permissionKey: dto.permissionKey } });
-    return this.detail(user, id);
+    this.authz.invalidate(id); // effective-permission cache
+    await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'PERMISSION_OVERRIDE_GRANTED', entityType: 'USER', entityId: id, severity: 'CRITICAL', metadata: { permissionKey: dto.permissionKey, effect, reason: dto.reason } });
+    return this.getUserPermissions(user, id);
   }
 
+  /** Remove an override → fall back to the role default for that permission. */
   async removeOverride(user: AuthenticatedUser, id: string, key: string) {
     await this.ensure(user, id);
     await this.prisma.userPermissionOverride.deleteMany({ where: { userId: id, permissionKey: key } });
-    await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'PERMISSION_OVERRIDE_REMOVED', entityType: 'USER', entityId: id, metadata: { permissionKey: key } });
-    return this.detail(user, id);
+    this.authz.invalidate(id);
+    await this.audit.record({ pharmacyId: user.pharmacyId, branchId: user.branchId, userId: user.userId, action: 'PERMISSION_OVERRIDE_REMOVED', entityType: 'USER', entityId: id, severity: 'CRITICAL', metadata: { permissionKey: key, note: 'reset to role default' } });
+    return this.getUserPermissions(user, id);
+  }
+
+  /**
+   * The per-user permission editor payload (spec §4): every registry permission,
+   * grouped by module, annotated with whether the user has it and WHY
+   * (role / granted / revoked / not-granted).
+   */
+  async getUserPermissions(user: AuthenticatedUser, id: string) {
+    await this.ensure(user, id);
+    const eff = await this.authz.getEffectivePermissions(id);
+    const fromRole = new Set(eff.fromRole);
+    const granted = new Set(eff.granted);
+    const revoked = new Set(eff.revoked);
+    const overrideRows = await this.prisma.userPermissionOverride.findMany({ where: { userId: id } });
+    const reasonByKey = new Map(overrideRows.map((o) => [o.permissionKey, o.reason ?? null]));
+
+    const items = PERMISSION_MATRIX.map((p) => {
+      const roleHas = eff.isSuperAdmin || fromRole.has(p.key);
+      const isGranted = granted.has(p.key);
+      const isRevoked = !eff.isSuperAdmin && revoked.has(p.key);
+      const active = eff.isSuperAdmin || eff.effective.includes(p.key);
+      // source explains WHY the current state is what it is.
+      const source = isGranted && !roleHas ? 'granted' : isRevoked ? 'revoked' : roleHas ? 'role' : 'none';
+      return { key: p.key, label: p.label, module: p.module, description: p.description, defaultRoles: p.allowedRoles.map((r) => ROLE_CLAIM[r]), roleHas, active, source, overrideReason: reasonByKey.get(p.key) ?? null };
+    });
+
+    // group by module, preserving registry order
+    const modules: string[] = [];
+    for (const it of items) if (!modules.includes(it.module)) modules.push(it.module);
+    return {
+      userId: id,
+      roles: eff.roles.map((r) => ROLE_CLAIM[r]),
+      isSuperAdmin: eff.isSuperAdmin,
+      groups: modules.map((m) => ({ module: m, permissions: items.filter((it) => it.module === m) })),
+    };
   }
 
   /** The consolidated role→permission grid (super_admin view). Static config. */

@@ -120,10 +120,16 @@ export class UsersController {
     return { data: await this.users.loginActivity(user, id), message: 'Login activity fetched' };
   }
 
+  @Get(':id/permissions')
+  @Roles(...MANAGE)
+  async permissions(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Promise<ControllerResult<unknown>> {
+    return { data: await this.users.getUserPermissions(user, id), message: 'Effective permissions fetched' };
+  }
+
   @Post(':id/permission-overrides')
   @Roles(...MANAGE)
-  async grantOverride(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: GrantOverrideDto): Promise<ControllerResult<unknown>> {
-    return { data: await this.users.grantOverride(user, id, dto), message: 'Override granted' };
+  async setOverride(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: GrantOverrideDto): Promise<ControllerResult<unknown>> {
+    return { data: await this.users.setOverride(user, id, dto), message: 'Permission override saved' };
   }
 
   @Delete(':id/permission-overrides/:key')

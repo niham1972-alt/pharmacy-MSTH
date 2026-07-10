@@ -4,8 +4,9 @@ import { Link, useParams } from 'react-router-dom';
 import { ApiClientError } from '../../shared/api/client';
 import { SYSTEM_ROLES, usersApi } from '../../features/users/api/users.api';
 import { RoleBadges, ROLE_LABEL, UserStatusBadge } from '../../features/users/components/UserStatusBadge';
+import { UserPermissionsTab } from '../../features/users/components/UserPermissionsTab';
 
-const TABS = ['Roles & Branches', 'Permission Overrides', 'Login Activity'] as const;
+const TABS = ['Roles & Branches', 'Permissions', 'Login Activity'] as const;
 
 export function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +61,11 @@ export function UserDetailPage() {
               <select value={newRole} onChange={(e) => setNewRole(e.target.value)} className="rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-sm">{SYSTEM_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select>
               <button onClick={() => act(() => usersApi.assignRole(u.id, newRole))} className="rounded-md bg-brand-600 px-3 py-1 text-sm text-white">Assign role</button>
             </div>
+            <p className="mt-2 text-xs text-gray-400">
+              Assigning multiple roles is <strong>cumulative</strong> and deliberate — the user gets the combined permissions of every role.
+              To grant broad access, assign the <strong>Admin</strong> or <strong>Super Admin</strong> role rather than stacking several narrow roles.
+              For finer tuning, use the <strong>Permissions</strong> tab to grant or revoke individual capabilities on top of the role.
+            </p>
           </div>
           <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
             <h2 className="mb-2 text-sm font-semibold">Branch access</h2>
@@ -71,17 +77,7 @@ export function UserDetailPage() {
         </div>
       )}
 
-      {tab === 'Permission Overrides' && (
-        <div className="rounded-lg border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
-          {u.permissionOverrides.length === 0 && <p className="px-4 py-6 text-center text-sm text-gray-500">No permission overrides — this user follows their role's standard permissions.</p>}
-          {u.permissionOverrides.map((o) => (
-            <div key={o.permissionKey} className="flex items-center justify-between px-4 py-2 text-sm">
-              <div><code className="text-xs">{o.permissionKey}</code>{o.reason && <span className="block text-xs text-gray-400">{o.reason}</span>}</div>
-              <button onClick={() => act(() => usersApi.removeOverride(u.id, o.permissionKey))} className="text-xs text-red-500">Remove</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {tab === 'Permissions' && <UserPermissionsTab userId={u.id} canManage />}
 
       {tab === 'Login Activity' && (
         <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">

@@ -1,7 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { SystemRole, StepUpStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PERMISSION_MATRIX, ROLE_CLAIM } from './config/permission-matrix.config';
+import { ROLE_CLAIM, permissionsForRoles } from './config/permission-matrix.config';
+
+export interface EffectivePermissions {
+  roles: SystemRole[];
+  fromRole: string[]; // keys the role(s) grant by default
+  granted: string[]; // keys added by an explicit GRANT override
+  revoked: string[]; // keys removed by an explicit REVOKE override
+  effective: string[]; // final resolved set = fromRole ∪ granted − revoked
+  isSuperAdmin: boolean;
+}
 
 /**
  * THE central RBAC engine (Module 16). Other modules' per-request authorization
@@ -15,6 +24,18 @@ import { PERMISSION_MATRIX, ROLE_CLAIM } from './config/permission-matrix.config
 export class AuthorizationService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Effective-permission cache. Keyed by DB user id; invalidated whenever a
+  // user's roles or overrides change (spec §Implementation Notes — "cache the
+  // resolved set per user, invalidate on change"). authUserId→userId is stable
+  // so it's cached without expiry to keep the per-request guard DB-free on a hit.
+  private readonly permCache = new Map<string, { value: EffectivePermissions; ts: number }>();
+  private readonly authToUserId = new Map<string, string>();
+  private readonly CACHE_TTL = 5 * 60_000;
+
+  invalidate(userId: string): void {
+    this.permCache.delete(userId);
+  }
+
   /** Roles a user currently holds (from this module's authoritative data). */
   async getUserRoles(params: { userId: string }): Promise<SystemRole[]> {
     const rows = await this.prisma.userRoleAssignment.findMany({ where: { userId: params.userId }, select: { role: true } });
@@ -27,18 +48,55 @@ export class AuthorizationService {
   }
 
   /**
-   * Role baseline (from the matrix) + active overrides. Overrides only ADD
-   * capability, never subtract (spec §11). Expired overrides are ignored.
+   * THE effective-permission resolver (spec §3): role defaults ∪ per-user grants
+   * − per-user revokes. Cached per user. super_admin always resolves to the full
+   * set and is immune to revokes (never lock out the top account).
    */
+  async getEffectivePermissions(userId: string): Promise<EffectivePermissions> {
+    const hit = this.permCache.get(userId);
+    if (hit && Date.now() - hit.ts < this.CACHE_TTL) return hit.value;
+
+    const [roleRows, overrides] = await Promise.all([
+      this.prisma.userRoleAssignment.findMany({ where: { userId }, select: { role: true } }),
+      this.prisma.userPermissionOverride.findMany({ where: { userId } }),
+    ]);
+    const roles = roleRows.map((r) => r.role);
+    const isSuperAdmin = roles.includes('SUPER_ADMIN');
+    const fromRole = permissionsForRoles(roles);
+
+    const now = Date.now();
+    const active = overrides.filter((o) => !o.expiresAt || o.expiresAt.getTime() > now);
+    const granted = active.filter((o) => o.effect === 'GRANT').map((o) => o.permissionKey);
+    const revoked = active.filter((o) => o.effect === 'REVOKE').map((o) => o.permissionKey);
+
+    const effectiveSet = new Set(fromRole);
+    for (const k of granted) effectiveSet.add(k);
+    if (!isSuperAdmin) for (const k of revoked) effectiveSet.delete(k); // super_admin keeps everything
+
+    const value: EffectivePermissions = { roles, fromRole: [...fromRole], granted, revoked, effective: [...effectiveSet], isSuperAdmin };
+    this.permCache.set(userId, { value, ts: Date.now() });
+    return value;
+  }
+
   async hasPermission(params: { userId: string; permissionKey: string }): Promise<boolean> {
-    const roles = await this.getUserRoles(params);
-    if (roles.includes('SUPER_ADMIN')) return true;
-    const def = PERMISSION_MATRIX.find((p) => p.key === params.permissionKey);
-    if (def && def.allowedRoles.some((r) => roles.includes(r))) return true;
-    // Fall through to a per-user override (addition only).
-    const now = new Date();
-    const override = await this.prisma.userPermissionOverride.findFirst({ where: { userId: params.userId, permissionKey: params.permissionKey } });
-    return !!override && (!override.expiresAt || override.expiresAt.getTime() > now.getTime());
+    const eff = await this.getEffectivePermissions(params.userId);
+    return eff.isSuperAdmin || eff.effective.includes(params.permissionKey);
+  }
+
+  /**
+   * Per-request entry point for the PermissionsGuard: resolves by the JWT's
+   * Supabase auth id. Returns null when the caller isn't a known DB user (e.g. a
+   * seed/system token) so the guard can fall back to a role-based check.
+   */
+  async getEffectivePermissionsByAuth(authUserId: string): Promise<EffectivePermissions | null> {
+    let userId = this.authToUserId.get(authUserId);
+    if (!userId) {
+      const u = await this.prisma.user.findFirst({ where: { authUserId }, select: { id: true } });
+      if (!u) return null;
+      userId = u.id;
+      this.authToUserId.set(authUserId, userId);
+    }
+    return this.getEffectivePermissions(userId);
   }
 
   /** Does a given role satisfy a required role? super_admin/admin cover everything. */

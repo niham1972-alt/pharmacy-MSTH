@@ -1108,15 +1108,21 @@ model UserBranchAccess {
   @@index([branchId])
 }
 
+enum PermissionOverrideEffect {
+  GRANT // adds a permission the user's role(s) don't include
+  REVOKE // removes a permission the user's role(s) would normally include
+}
+
 model UserPermissionOverride {
-  id            String    @id @default(uuid())
+  id            String                   @id @default(uuid())
   userId        String
   permissionKey String
+  effect        PermissionOverrideEffect @default(GRANT)
   grantedBy     String
-  grantedAt     DateTime  @default(now())
+  grantedAt     DateTime                 @default(now())
   reason        String?
   expiresAt     DateTime?
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, permissionKey])
   @@index([userId])

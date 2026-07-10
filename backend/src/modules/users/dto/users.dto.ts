@@ -42,6 +42,7 @@ export class SuspendDto {
 
 export class GrantOverrideDto {
   @IsString() permissionKey!: string;
+  @IsOptional() @IsIn(['GRANT', 'REVOKE']) effect?: 'GRANT' | 'REVOKE'; // default GRANT
   @IsOptional() @IsString() reason?: string;
   @IsOptional() @IsString() expiresAt?: string;
 }
