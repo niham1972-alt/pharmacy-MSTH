@@ -7,6 +7,20 @@ import { MedicineFormValues } from '../../features/medicines/types/medicine.type
 
 const STORAGE_CONDITIONS = ['ROOM_TEMP', 'REFRIGERATED', 'FROZEN', 'CONTROLLED_ROOM_TEMP'];
 
+/**
+ * Defined at module scope — NOT inside the page component. If it were nested, a
+ * fresh function identity on every render would remount the whole section
+ * (inputs included) on each keystroke, stealing focus after one character.
+ */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+      <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
 const EMPTY: MedicineFormValues = {
   genericName: '',
   brandName: '',
@@ -149,13 +163,6 @@ export function MedicineFormPage() {
   const err = (k: string) => errors[k] && <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">{errors[k]}</p>;
 
   if (isEdit && detail.isLoading) return <p className="text-sm text-gray-500">Loading…</p>;
-
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <section className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-      <h2 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
-    </section>
-  );
 
   return (
     <form onSubmit={onSubmit} className="mx-auto max-w-3xl space-y-4">

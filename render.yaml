@@ -1,0 +1,31 @@
+# Render Blueprint — free Docker web service for the Pharmacy MSTH backend.
+# Region 'singapore' is closest to the Supabase ap-southeast-1 database.
+# Secret env vars are marked `sync: false` so their values are entered in the
+# Render dashboard (never committed to git).
+services:
+  - type: web
+    name: msth-pharma-backend
+    runtime: docker
+    region: singapore
+    plan: free
+    branch: main
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    # Run migrations, then start the app (Render injects PORT; the app reads it).
+    dockerCommand: sh -c "npm run migrate:deploy && node dist/main.js"
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: AUDIT_HASH_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

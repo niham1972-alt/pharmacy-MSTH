@@ -6,7 +6,7 @@
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x", "linux-musl"]
 }
 datasource db {
   provider = "postgresql"
@@ -1108,15 +1108,21 @@ model UserBranchAccess {
   @@index([branchId])
 }
 
+enum PermissionOverrideEffect {
+  GRANT // adds a permission the user's role(s) don't include
+  REVOKE // removes a permission the user's role(s) would normally include
+}
+
 model UserPermissionOverride {
-  id            String    @id @default(uuid())
+  id            String                   @id @default(uuid())
   userId        String
   permissionKey String
+  effect        PermissionOverrideEffect @default(GRANT)
   grantedBy     String
-  grantedAt     DateTime  @default(now())
+  grantedAt     DateTime                 @default(now())
   reason        String?
   expiresAt     DateTime?
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, permissionKey])
   @@index([userId])
@@ -1213,4 +1219,107 @@ model SettingChangeHistory {
   changedAt  DateTime @default(now())
 
   @@index([pharmacyId, settingKey, changedAt])
+}
+
+// ---------------------------------------------------------------------------
+// MODULE 10 — Sales Returns. A return is a NEW, separate transaction that
+// references the original Sale/SaleItem (Module 4) but never mutates them
+// (only Sale.status transitions, via SalesService.markReturnStatus). Stock is
+// restored via Module 5/6 only for RESALEABLE items. Controlled substances are
+// hard-blocked from return. All cross-module refs are loose (no FK relations
+// into Modules 4/8) to preserve ownership boundaries — same discipline as the
+// batch↔GRN reference.
+// ---------------------------------------------------------------------------
+
+enum RefundMethod {
+  CASH
+  CARD
+  STORE_CREDIT
+  EXCHANGE
+  NO_REFUND
+}
+
+enum ConditionAssessment {
+  RESALEABLE
+  NOT_RESALEABLE
+}
+
+enum ReturnReasonCode {
+  CUSTOMER_CHANGED_MIND
+  INCORRECT_ITEM_DISPENSED
+  ADVERSE_REACTION
+  DAMAGED_DEFECTIVE
+  PRESCRIPTION_CHANGED
+  OTHER
+}
+
+model SalesReturn {
+  id                String            @id @default(uuid())
+  pharmacyId        String
+  branchId          String // the branch physically PROCESSING the return (may differ from original sale's branch — cross-branch returns allowed)
+  returnNumber      String // RTN-YYYY-NNNNNN
+  originalSaleId    String // loose ref to Module 4's Sale
+  customerId        String? // inherited from the original sale; null for walk-ins
+  processedBy       String
+  approvedBy        String? // set when elevated (prescription/clinical) approval was required
+  returnDate        DateTime          @default(now())
+  totalRefundAmount Decimal           @db.Decimal(14, 2)
+  refundMethod      RefundMethod
+  refundReference   String? // card/store-credit/exchange reference
+  exchangeSaleId    String? // linked replacement sale when refundMethod = EXCHANGE
+  notes             String?
+  items             SalesReturnItem[]
+  createdAt         DateTime          @default(now())
+
+  @@unique([pharmacyId, returnNumber])
+  @@index([pharmacyId, branchId, returnDate])
+  @@index([originalSaleId])
+  @@index([customerId])
+}
+
+model SalesReturnItem {
+  id                  String              @id @default(uuid())
+  salesReturnId       String
+  originalSaleItemId  String // loose ref to Module 4's SaleItem — the over-return guard key
+  medicineId          String
+  batchId             String? // original batch (for resaleable restoration / traceability)
+  quantityReturned    Int
+  unitPriceAtSale     Decimal             @db.Decimal(12, 2) // snapshot copied from the original SaleItem
+  refundAmountForLine Decimal             @db.Decimal(14, 2)
+  conditionAssessment ConditionAssessment
+  reasonCode          ReturnReasonCode
+  reasonNote          String?
+  conditionPhotoUrl   String?
+  restoredToStock     Boolean             @default(false) // true when RESALEABLE units rejoined sellable inventory
+  flaggedForReview    Boolean             @default(false) // true when the original batch was defunct — needs inventory_manager attention
+  salesReturn         SalesReturn         @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+
+  @@index([salesReturnId])
+  @@index([originalSaleItemId])
+  @@index([medicineId])
+}
+
+model StoreCreditBalance {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  customerId String
+  balance    Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([pharmacyId, customerId])
+}
+
+model StoreCreditLedgerEntry {
+  id              String   @id @default(uuid())
+  pharmacyId      String
+  customerId      String
+  direction       String // CREDIT | DEBIT
+  amount          Decimal  @db.Decimal(12, 2)
+  balanceAfter    Decimal  @db.Decimal(12, 2)
+  referenceModule String // SALES_RETURN | SALE
+  referenceId     String
+  performedBy     String
+  createdAt       DateTime @default(now())
+
+  @@index([pharmacyId, customerId, createdAt])
 }

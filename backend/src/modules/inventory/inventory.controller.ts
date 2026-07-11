@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ControllerResult } from '../../common/interceptors/response-envelope.interceptor';
@@ -12,10 +14,9 @@ import { CreateTransferDto, QueryInventoryDto, SubmitReconciliationDto } from '.
 
 const READ = ['super_admin', 'admin', 'pharmacist', 'inventory_manager', 'accountant', 'auditor'] as const;
 const MANAGE = ['super_admin', 'admin', 'inventory_manager'] as const;
-const VALUATION = ['super_admin', 'admin', 'inventory_manager', 'accountant', 'auditor'] as const;
 
 @Controller('inventory')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class InventoryController {
   constructor(
     private readonly read: InventoryReadService,
@@ -31,7 +32,7 @@ export class InventoryController {
   }
 
   @Get('summary')
-  @Roles(...VALUATION)
+  @RequirePermission('inventory.valuation.view')
   async summary(@CurrentUser() user: AuthenticatedUser, @Query('branchId') branchId?: string): Promise<ControllerResult<unknown>> {
     return { data: await this.read.summary(user, branchId), message: 'Inventory summary fetched' };
   }
@@ -43,7 +44,7 @@ export class InventoryController {
   }
 
   @Get('valuation')
-  @Roles(...VALUATION)
+  @RequirePermission('inventory.valuation.view')
   async valuation(@CurrentUser() user: AuthenticatedUser, @Query('branchId') branchId?: string): Promise<ControllerResult<unknown>> {
     return { data: await this.read.valuation(user, branchId), message: 'Valuation fetched' };
   }

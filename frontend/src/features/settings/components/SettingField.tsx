@@ -60,6 +60,8 @@ export function SettingField({ item, canWrite, onSaved, onHistory }: { item: Set
           )}
           {item.valueType === 'JSON' && rule.expiryTiers ? (
             <ExpiryTiersEditor value={value as { red: number; orange: number; yellow: number }} disabled={!canWrite} onCommit={(v) => { setValue(v); save(v); }} />
+          ) : item.valueType === 'JSON' && rule.stringArray ? (
+            <StringArrayEditor value={(value as string[]) ?? []} disabled={!canWrite} onCommit={(v) => { setValue(v); save(v); }} />
           ) : item.valueType === 'JSON' ? (
             <code className="max-w-xs truncate text-xs text-gray-500">{JSON.stringify(value)}</code>
           ) : null}
@@ -70,6 +72,17 @@ export function SettingField({ item, canWrite, onSaved, onHistory }: { item: Set
         </div>
       </div>
     </div>
+  );
+}
+
+/** Comma-separated editor for a JSON string array (e.g. non-returnable categories). */
+function StringArrayEditor({ value, disabled, onCommit }: { value: string[]; disabled: boolean; onCommit: (v: string[]) => void }) {
+  const [text, setText] = useState(value.join(', '));
+  useEffect(() => setText(value.join(', ')), [value]);
+  const commit = () => onCommit(text.split(',').map((s) => s.trim()).filter(Boolean));
+  return (
+    <input disabled={disabled} value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} placeholder="comma-separated"
+      className="w-64 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm" />
   );
 }
 

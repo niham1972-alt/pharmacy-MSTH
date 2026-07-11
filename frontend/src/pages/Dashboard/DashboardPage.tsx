@@ -14,39 +14,45 @@ export function DashboardPage() {
   const { t } = useTranslation();
 
   return (
-    <div className="print-grid space-y-6" data-testid="dashboard-page">
-      <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{t('dashboard.title')}</h1>
-        <DateRangeFilter />
+    <div className="print-grid space-y-3" data-testid="dashboard-page">
+      <div className="no-print flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('dashboard.title')}</h1>
+        {/* Controls are secondary chrome — kept small/light next to the data. */}
+        <div className="scale-95 opacity-90">
+          <DateRangeFilter />
+        </div>
       </div>
 
+      {/* Zone A — KPI row */}
       <WidgetErrorBoundary title="KPI summary">
         <KpiCardGrid />
       </WidgetErrorBoundary>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <WidgetErrorBoundary title="Sales trend">
-          <SalesTrendChart />
-        </WidgetErrorBoundary>
+      {/* Zone B — trend (wider) + top selling, side by side */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <WidgetErrorBoundary title="Sales trend">
+            <SalesTrendChart />
+          </WidgetErrorBoundary>
+        </div>
         <WidgetErrorBoundary title="Top selling medicines">
           <TopSellingTable />
         </WidgetErrorBoundary>
       </div>
 
+      {/* Zone C — compact, self-scrolling alerts list */}
       <WidgetErrorBoundary title="Alerts">
         <AlertsPanel />
       </WidgetErrorBoundary>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Secondary widgets (below the primary fold; scroll acceptable here) */}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <WidgetErrorBoundary title="Activity feed">
           <ActivityFeed />
         </WidgetErrorBoundary>
         <WidgetErrorBoundary title="Purchase snapshot">
           <PurchaseSnapshotCard />
         </WidgetErrorBoundary>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <WidgetErrorBoundary title="Cash summary">
           <CashSummaryCard />
         </WidgetErrorBoundary>

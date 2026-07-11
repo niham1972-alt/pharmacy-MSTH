@@ -148,11 +148,16 @@ private async syncCoreSettings(): Promise<void> {
     await this.audit.record({ pharmacyId: params.pharmacyId, branchId: params.branchId, userId: params.updatedBy, action: 'SETTING_RESET_TO_DEFAULT', entityType: 'SETTING', entityId: key, severity: 'SENSITIVE', metadata: { key } });
   }
 
-  private invalidate(pharmacyId: string, branchId: string | undefined, key: string): void {
-    // Invalidate the exact key + both scopes (a pharmacy-wide change affects
-    // branches that fall through to it).
-    this.cache.delete(this.cacheKey(pharmacyId, branchId, key));
-    this.cache.delete(this.cacheKey(pharmacyId, undefined, key));
+  private invalidate(pharmacyId: string, _branchId: string | undefined, key: string): void {
+    // Drop EVERY cached scope of this key for the pharmacy — pharmacy-wide AND
+    // all per-branch entries. A pharmacy-wide change is inherited by every branch
+    // that has no override, so clearing only the exact scope would leave branch
+    // reads serving a stale fall-through value.
+    const prefix = `${pharmacyId}:`;
+    const suffix = `:${key}`;
+    for (const k of this.cache.keys()) {
+      if (k.startsWith(prefix) && k.endsWith(suffix)) this.cache.delete(k);
+    }
   }
 
   // =========================================================================
@@ -190,6 +195,9 @@ private async syncCoreSettings(): Promise<void> {
           const t = value as { red?: number; orange?: number; yellow?: number };
           if (!t || typeof t.red !== 'number' || typeof t.orange !== 'number' || typeof t.yellow !== 'number') fail('Expiry tiers need numeric red/orange/yellow day values.');
           if (!(t.red! < t.orange! && t.orange! < t.yellow!)) fail('Expiry tiers must ascend: red < orange < yellow.');
+        }
+        if (rule.stringArray) {
+          if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) fail(`${def.label} must be a list of text values.`);
         }
         break;
     }

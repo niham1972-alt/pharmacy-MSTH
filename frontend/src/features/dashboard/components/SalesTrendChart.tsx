@@ -17,8 +17,8 @@ export function SalesTrendChart() {
   if (!canAccessWidget(user?.role, 'salesTrend')) return null;
 
   return (
-    <section aria-labelledby="sales-trend-heading" className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-      <h2 id="sales-trend-heading" className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
+    <section aria-labelledby="sales-trend-heading" className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
+      <h2 id="sales-trend-heading" className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
         {t('dashboard.salesTrend.title')}
       </h2>
 
@@ -28,7 +28,7 @@ export function SalesTrendChart() {
         <EmptyState message={t('dashboard.empty.noSalesToday')} />
       )}
       {!isLoading && !isError && data && data.length > 0 && (
-        <div style={{ width: '100%', height: 260 }} role="img" aria-label={t('dashboard.salesTrend.title')}>
+        <div style={{ width: '100%', height: 140 }} role="img" aria-label={t('dashboard.salesTrend.title')}>
           <ResponsiveContainer>
             <LineChart data={data}>
               <XAxis dataKey="date" tickFormatter={(d: string) => new Date(d).toLocaleDateString()} fontSize={12} />

@@ -1,0 +1,33 @@
+# Fly.io config for the Pharmacy MSTH backend (NestJS + Prisma).
+# Region 'sin' (Singapore) is closest to the Supabase ap-southeast-1 DB.
+app = "msth-pharma-backend"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Migrations run once, before the new version goes live (has DATABASE_URL secret + prisma CLI).
+[deploy]
+  release_command = "npm run migrate:deploy"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "10s"
+    grace_period = "40s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

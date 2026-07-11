@@ -1,7 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ControllerResult } from '../../common/interceptors/response-envelope.interceptor';
@@ -10,10 +12,9 @@ import { DiscountApprovalDto, FinalizeSaleDto, ParkSaleDto, PriceCheckDto, VoidS
 
 const READ = ['super_admin', 'admin', 'pharmacist', 'cashier', 'accountant', 'auditor'] as const;
 const SELL = ['super_admin', 'admin', 'pharmacist', 'cashier'] as const;
-const ELEVATED = ['super_admin', 'admin', 'pharmacist'] as const;
 
 @Controller('sales')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class SalesController {
   constructor(private readonly sales: SalesService) {}
 
@@ -48,7 +49,7 @@ export class SalesController {
   }
 
   @Post()
-  @Roles(...SELL)
+  @RequirePermission('sales.sell')
   async finalize(@CurrentUser() user: AuthenticatedUser, @Body() dto: FinalizeSaleDto): Promise<ControllerResult<unknown>> {
     return { data: await this.sales.finalize(user, dto), message: 'Sale completed' };
   }
@@ -67,7 +68,7 @@ export class SalesController {
   }
 
   @Post(':id/void')
-  @Roles(...ELEVATED)
+  @RequirePermission('sales.void')
   async voidSale(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: VoidSaleDto): Promise<ControllerResult<unknown>> {
     return { data: await this.sales.voidSale(user, id, dto), message: 'Sale voided' };
   }

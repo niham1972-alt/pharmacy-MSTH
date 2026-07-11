@@ -10,6 +10,14 @@ export class InviteUserDto {
   @IsOptional() @IsString() defaultBranchId?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() employeeId?: string;
+  // Optional initial password — if set, the user can log in immediately and is
+  // created ACTIVE. If omitted, they stay PENDING_ACTIVATION until a password is
+  // set (via a Supabase reset link or the set-password action) and they log in.
+  @IsOptional() @IsString() @Length(8, 72) password?: string;
+}
+
+export class SetPasswordDto {
+  @IsString() @Length(8, 72) password!: string;
 }
 
 export class UpdateUserDto {
@@ -34,6 +42,7 @@ export class SuspendDto {
 
 export class GrantOverrideDto {
   @IsString() permissionKey!: string;
+  @IsOptional() @IsIn(['GRANT', 'REVOKE']) effect?: 'GRANT' | 'REVOKE'; // default GRANT
   @IsOptional() @IsString() reason?: string;
   @IsOptional() @IsString() expiresAt?: string;
 }

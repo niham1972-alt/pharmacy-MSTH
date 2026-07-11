@@ -45,6 +45,25 @@ export interface PermissionMatrix {
   permissions: Array<{ key: string; module: string; description: string; allowed: Record<SystemRole, boolean> }>;
 }
 
+export type PermissionSource = 'role' | 'granted' | 'revoked' | 'none';
+export interface EffectivePermissionItem {
+  key: string;
+  label: string;
+  module: string;
+  description: string;
+  defaultRoles: string[];
+  roleHas: boolean; // would the role grant this by default?
+  active: boolean; // effective result
+  source: PermissionSource; // WHY it's in its current state
+  overrideReason: string | null;
+}
+export interface UserPermissions {
+  userId: string;
+  roles: string[];
+  isSuperAdmin: boolean;
+  groups: Array<{ module: string; permissions: EffectivePermissionItem[] }>;
+}
+
 function qs(params: Record<string, string | number | undefined | null>): string {
   const s = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== null && v !== undefined && v !== '') s.set(k, String(v));
@@ -57,7 +76,8 @@ export const usersApi = {
   recordLogin: () => apiClient.post('/users/login-event'),
   list: (params: Record<string, string | number | undefined | null>) => apiClient.get<UserRow[]>(`/users${qs(params)}`),
   detail: (id: string) => apiClient.get<UserDetail>(`/users/${id}`),
-  invite: (body: { name: string; email: string; role: string; branchIds?: string[]; defaultBranchId?: string; phone?: string }) => apiClient.post<{ id: string; note: string }>('/users/invite', body),
+  invite: (body: { name: string; email: string; role: string; branchIds?: string[]; defaultBranchId?: string; phone?: string; password?: string }) => apiClient.post<{ id: string; note: string }>('/users/invite', body),
+  setPassword: (id: string, password: string) => apiClient.post<{ id: string; updated: boolean }>(`/users/${id}/set-password`, { password }),
   update: (id: string, body: Record<string, unknown>) => apiClient.put<UserDetail>(`/users/${id}`, body),
   assignRole: (id: string, role: string) => apiClient.post<UserDetail>(`/users/${id}/roles`, { role }),
   removeRole: (id: string, role: string) => apiClient.delete<UserDetail>(`/users/${id}/roles/${role}`),
@@ -68,8 +88,9 @@ export const usersApi = {
   deactivate: (id: string) => apiClient.post<{ status: string }>(`/users/${id}/deactivate`),
   revokeSessions: (id: string) => apiClient.post(`/users/${id}/revoke-sessions`),
   loginActivity: (id: string) => apiClient.get<Array<{ id: string; loginAt: string; ipAddress: string | null; userAgent: string | null; success: boolean }>>(`/users/${id}/login-activity`),
-  grantOverride: (id: string, permissionKey: string, reason?: string) => apiClient.post<UserDetail>(`/users/${id}/permission-overrides`, { permissionKey, reason }),
-  removeOverride: (id: string, key: string) => apiClient.delete<UserDetail>(`/users/${id}/permission-overrides/${key}`),
+  getPermissions: (id: string) => apiClient.get<UserPermissions>(`/users/${id}/permissions`),
+  setOverride: (id: string, permissionKey: string, effect: 'GRANT' | 'REVOKE', reason?: string) => apiClient.post<UserPermissions>(`/users/${id}/permission-overrides`, { permissionKey, effect, reason }),
+  clearOverride: (id: string, key: string) => apiClient.delete<UserPermissions>(`/users/${id}/permission-overrides/${key}`),
   permissionMatrix: () => apiClient.get<PermissionMatrix>('/users/permission-matrix'),
 };
 

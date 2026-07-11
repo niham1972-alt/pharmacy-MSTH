@@ -4,7 +4,7 @@ import { useAuth } from '../../shared/auth/AuthContext';
 import { SettingHistoryRow, settingsApi } from '../../features/settings/api/settings.api';
 import { SettingField } from '../../features/settings/components/SettingField';
 
-const CATEGORY_ORDER = ['General', 'Dashboard', 'Medicines', 'Purchases', 'Sales', 'Inventory', 'Batches', 'Customers', 'Users', 'Audit'];
+const CATEGORY_ORDER = ['General', 'Dashboard', 'Medicines', 'Purchases', 'Sales', 'Returns', 'Inventory', 'Batches', 'Customers', 'Users', 'Audit'];
 
 export function SettingsPage() {
   const { user } = useAuth();
