@@ -6,6 +6,10 @@
 FROM node:20-alpine AS build
 RUN apk add --no-cache openssl
 WORKDIR /app
+# `prisma generate` validates the datasource's env("DATABASE_URL") at build time
+# (it does NOT connect). Build hosts like Render don't expose runtime env vars to
+# the build, so give it a throwaway URL here — the REAL one is injected at runtime.
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 COPY package*.json ./
 RUN npm install
 COPY prisma ./prisma
