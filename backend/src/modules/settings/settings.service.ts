@@ -33,19 +33,29 @@ export class SettingsService implements OnModuleInit {
 
   /** Idempotently ensure every registered definition exists in the DB at boot. */
   async onModuleInit(): Promise<void> {
-    try {
-      for (const d of CORE_SETTINGS) {
-        await this.prisma.settingDefinition.upsert({
+  // Don't block app startup on this — run in background so the server
+  // starts listening immediately and passes Railway's healthcheck.
+  this.syncCoreSettings().catch((err) => {
+    this.logger.error(`Could not sync setting definitions: ${(err as Error).message}`);
+  });
+}
+
+private async syncCoreSettings(): Promise<void> {
+  try {
+    await Promise.all(
+      CORE_SETTINGS.map((d) =>
+        this.prisma.settingDefinition.upsert({
           where: { key: d.key },
           update: { label: d.label, description: d.description, category: d.category, valueType: d.valueType, defaultValue: d.defaultValue as Prisma.InputJsonValue, validationRule: (d.validationRule ?? Prisma.JsonNull) as Prisma.InputJsonValue, scope: d.scope ?? 'PHARMACY', isSensitive: d.isSensitive ?? false },
           create: { key: d.key, label: d.label, description: d.description, category: d.category, valueType: d.valueType, defaultValue: d.defaultValue as Prisma.InputJsonValue, validationRule: (d.validationRule ?? Prisma.JsonNull) as Prisma.InputJsonValue, scope: d.scope ?? 'PHARMACY', isSensitive: d.isSensitive ?? false },
-        });
-      }
-      this.logger.log(`Registered ${CORE_SETTINGS.length} setting definitions.`);
-    } catch (err) {
-      this.logger.error(`Could not sync setting definitions (will use in-memory registry): ${(err as Error).message}`);
-    }
+        })
+      )
+    );
+    this.logger.log(`Registered ${CORE_SETTINGS.length} setting definitions.`);
+  } catch (err) {
+    this.logger.error(`Could not sync setting definitions (will use in-memory registry): ${(err as Error).message}`);
   }
+}
 
   private cacheKey(pharmacyId: string, branchId: string | undefined, key: string): string {
     return `${pharmacyId}:${branchId ?? '_'}:${key}`;
