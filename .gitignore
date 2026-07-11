@@ -13,3 +13,4 @@ Thumbs.db
 .idea/
 backend/generated/
 frontend/dist/
+backend/logs.txt
