@@ -1,0 +1,61 @@
+[INFO] 
+✔ Generated Prisma Client (v5.22.0) to ./node_modules/@prisma/client in 516ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want real-time updates to your database without manual polling? Discover how with Pulse: https://pris.ly/tip-0-pulse
+
+
+[INFO] [build 8/9] RUN npx prisma generate
+[INFO] [build 9/9] RUN npm run build
+[INFO] 
+> backend@0.1.0 build
+> prisma generate && nest build
+
+
+scheduling build on Metal builder "builder-zxzvnh"
+[INFO] Prisma schema loaded from prisma/schema.prisma
+
+[INFO] 
+✔ Generated Prisma Client (v5.22.0) to ./node_modules/@prisma/client in 533ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want real-time updates to your database without manual polling? Discover how with Pulse: https://pris.ly/tip-0-pulse
+
+
+scheduling build on Metal builder "builder-zxzvnh"
+[INFO] [build 9/9] RUN npm run build
+[INFO] [runtime 7/8] COPY --from=build /app/dist ./dist
+[INFO] [runtime 7/8] COPY --from=build /app/dist ./dist
+[INFO] [runtime 8/8] COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+[INFO] [runtime 8/8] COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+[INFO] exporting to docker image format
+[INFO] exporting to docker image format
+containerimage.config.digest: sha256:3620be7e55baaa1e6caed648242ed20cfd622fbe06955bd67e6d93131e358937
+containerimage.digest: sha256:5b77321bfbe750ca480a06abc1bf3e960b2c54bc542b7e90498988c2d68404d7
+containerimage.descriptor: eyJtZWRpYVR5cGUiOiJhcHBsaWNhdGlvbi92bmQub2NpLmltYWdlLm1hbmlmZXN0LnYxK2pzb24iLCJkaWdlc3QiOiJzaGEyNTY6NWI3NzMyMWJmYmU3NTBjYTQ4MGEwNmFiYzFiZjNlOTYwYjJjNTRiYzU0MmI3ZTkwNDk4OTg4YzJkNjg0MDRkNyIsInNpemUiOjIzOTAsImFubm90YXRpb25zIjp7Im9yZy5vcGVuY29udGFpbmVycy5pbWFnZS5jcmVhdGVkIjoiMjAyNi0wNy0wOVQwODozMDoxNVoifSwicGxhdGZvcm0iOnsiYXJjaGl0ZWN0dXJlIjoiYW1kNjQiLCJvcyI6ImxpbnV4In19
+[INFO] image push
+[INFO] image push
+
+[35m====================
+Starting Healthcheck
+====================
+[0m
+[37mPath: /api/health[0m
+[37mRetry window: 5m0s[0m
+
+[93mAttempt #1 failed with service unavailable. Continuing to retry for 4m49s[0m
+[93mAttempt #2 failed with service unavailable. Continuing to retry for 4m38s[0m
+[93mAttempt #3 failed with service unavailable. Continuing to retry for 4m26s[0m
+[93mAttempt #4 failed with service unavailable. Continuing to retry for 4m12s[0m
+[93mAttempt #5 failed with service unavailable. Continuing to retry for 3m54s[0m
+[93mAttempt #6 failed with service unavailable. Continuing to retry for 3m28s[0m
+[93mAttempt #7 failed with service unavailable. Continuing to retry for 2m48s[0m
+[93mAttempt #8 failed with service unavailable. Continuing to retry for 2m8s[0m
+[93mAttempt #9 failed with service unavailable. Continuing to retry for 1m28s[0m
+[93mAttempt #10 failed with service unavailable. Continuing to retry for 48s[0m
+[93mAttempt #11 failed with service unavailable. Continuing to retry for 8s[0m
+
+[91m1/1 replicas never became healthy![0m
+[91mHealthcheck failed![0m
