@@ -1323,3 +1323,72 @@ model StoreCreditLedgerEntry {
 
   @@index([pharmacyId, customerId, createdAt])
 }
+
+// ---------------------------------------------------------------------------
+// MODULE 9 — Purchase Returns. Mirror of Module 10 but flowing OUT to the
+// supplier, against Module 3's GoodsReceipt (never mutated). Stock leaves via
+// Module 5 (recordStockOut, reason PURCHASE_RETURN); no resaleable branching —
+// the goods physically leave the pharmacy. Settlement tracks the supplier
+// credit note (financial reconciliation), separate from the one-time stock
+// removal. All cross-module refs are loose (no FK into Modules 3/6/7).
+// ---------------------------------------------------------------------------
+
+enum PurchaseReturnSettlementStatus {
+  PENDING // sent, awaiting supplier confirmation/credit
+  CREDITED // supplier issued a full credit note
+  PARTIALLY_CREDITED // supplier credited less than expected
+  REJECTED // supplier declined the return (no stock restoration — financial outcome only)
+}
+
+enum PurchaseReturnReasonCode {
+  NEAR_EXPIRY
+  DAMAGED_DEFECTIVE
+  WRONG_ITEM_SHIPPED
+  QUALITY_RECALL
+  EXCESS_STOCK
+  OTHER
+}
+
+model PurchaseReturn {
+  id                    String                         @id @default(uuid())
+  pharmacyId            String
+  branchId              String
+  returnNumber          String // PRTN-YYYY-NNNNNN
+  originalGrnId         String // loose ref to Module 3's GoodsReceipt
+  supplierId            String // inherited from the originating PO (Module 7)
+  initiatedBy           String
+  returnDate            DateTime                       @default(now())
+  settlementStatus      PurchaseReturnSettlementStatus @default(PENDING)
+  expectedCreditAmount  Decimal                        @db.Decimal(14, 2)
+  actualCreditedAmount  Decimal?                       @db.Decimal(14, 2)
+  supplierCreditNoteRef String?
+  settledAt             DateTime?
+  settledBy             String?
+  notes                 String?
+  items                 PurchaseReturnItem[]
+  createdAt             DateTime                       @default(now())
+
+  @@unique([pharmacyId, returnNumber])
+  @@index([pharmacyId, branchId, returnDate])
+  @@index([originalGrnId])
+  @@index([supplierId, settlementStatus])
+}
+
+model PurchaseReturnItem {
+  id                String                   @id @default(uuid())
+  purchaseReturnId  String
+  originalGrnItemId String // loose ref to Module 3's GoodsReceiptItem — the over-return guard key
+  medicineId        String
+  batchId           String? // resolved Module 6 batch (by GRN item's batchNumber)
+  quantityReturned  Int
+  unitCostAtReceipt Decimal                  @db.Decimal(12, 2) // snapshot from the GRN item
+  reasonCode        PurchaseReturnReasonCode
+  reasonNote        String?
+  relatedRecallId   String? // loose ref to Module 6's BatchRecall when reasonCode = QUALITY_RECALL
+  photoUrl          String?
+  purchaseReturn    PurchaseReturn           @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseReturnId])
+  @@index([originalGrnItemId])
+  @@index([medicineId])
+}

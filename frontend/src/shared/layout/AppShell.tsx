@@ -28,6 +28,7 @@ const GROUPS: NavGroup[] = [
     label: 'Procurement',
     items: [
       { label: 'Purchases', to: '/purchases', hideForRoles: ['cashier'] },
+      { label: 'Purchase Returns', to: '/purchase-returns', hideForRoles: ['cashier', 'pharmacist'] },
       { label: 'Suppliers', to: '/suppliers', hideForRoles: ['cashier'] },
     ],
   },

@@ -377,6 +377,37 @@ export class BatchesService {
     });
   }
 
+  /**
+   * Remove returned-to-supplier stock (Module 9). Decrements the specific batch's
+   * quantity and records a `PURCHASE_RETURN` ledger OUT. Rejects if the batch no
+   * longer holds enough units (spec §21 — can't return goods already sold).
+   * Runs inside the caller's transaction.
+   */
+  async recordSupplierReturnOut(
+    params: { pharmacyId: string; branchId: string; items: Array<{ medicineId: string; batchId: string | null; quantity: number; unitCost?: number }>; referenceId: string; performedBy: string; notes?: string },
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    return this.run(tx, async (c) => {
+      const now = new Date();
+      for (const it of params.items) {
+        if (it.batchId) {
+          const b = await c.medicineBatch.findUnique({ where: { id: it.batchId } });
+          if (b) {
+            if (b.currentQuantity < it.quantity) {
+              throw new BadRequestException({ errorCode: 'INSUFFICIENT_BATCH_STOCK', message: `Only ${b.currentQuantity} unit(s) of batch ${b.batchNumber} are still in stock — cannot return ${it.quantity}.`, data: { available: b.currentQuantity } });
+            }
+            const nextQty = b.currentQuantity - it.quantity;
+            await c.medicineBatch.update({ where: { id: b.id }, data: { currentQuantity: nextQty, status: this.computeStatus({ isRecalled: b.isRecalled, currentQuantity: nextQty, expiryDate: b.expiryDate }, now) } });
+          }
+        }
+        await this.inventory.recordStockOut(
+          { pharmacyId: params.pharmacyId, branchId: params.branchId, medicineId: it.medicineId, batchId: it.batchId ?? null, quantity: it.quantity, unitCost: it.unitCost, reasonCode: 'PURCHASE_RETURN', referenceModule: 'PURCHASE_RETURN', referenceId: params.referenceId, performedBy: params.performedBy, notes: params.notes },
+          c,
+        );
+      }
+    });
+  }
+
   /** Single enforcement point for the expired/recalled/depleted hard-block. */
   async isBatchSellable(params: { batchId: string }): Promise<boolean> {
     const b = await this.prisma.medicineBatch.findUnique({ where: { id: params.batchId } });

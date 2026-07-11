@@ -43,6 +43,10 @@ import { ProcessReturnPage } from './pages/SalesReturns/ProcessReturnPage';
 import { SalesReturnsListPage } from './pages/SalesReturns/SalesReturnsListPage';
 import { SalesReturnDetailPage } from './pages/SalesReturns/SalesReturnDetailPage';
 import { ReturnRateReportsPage } from './pages/SalesReturns/ReturnRateReportsPage';
+import { InitiateReturnPage } from './pages/PurchaseReturns/InitiateReturnPage';
+import { PurchaseReturnsListPage } from './pages/PurchaseReturns/PurchaseReturnsListPage';
+import { PurchaseReturnDetailPage } from './pages/PurchaseReturns/PurchaseReturnDetailPage';
+import { PendingSettlementsPage } from './pages/PurchaseReturns/PendingSettlementsPage';
 import { AuditLogsListPage } from './pages/AuditLogs/AuditLogsListPage';
 import { SensitiveEventsPage } from './pages/AuditLogs/SensitiveEventsPage';
 import { UserActivityPage } from './pages/AuditLogs/UserActivityPage';
@@ -109,6 +113,20 @@ function CustomersGate() {
 function UsersGate() {
   const { user } = useAuth();
   if (!['super_admin', 'admin'].includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
+/** Purchase Returns: admin/inventory_manager/accountant/auditor (spec §13, cashier & pharmacist excluded). */
+function PurchaseReturnsGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin', 'inventory_manager', 'accountant', 'auditor'].includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
+/** Initiating a purchase return: admin/inventory_manager only. */
+function InitiatePurchaseReturnGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin', 'inventory_manager'].includes(user?.role ?? '')) return <Navigate to="/purchase-returns" replace />;
   return <Outlet />;
 }
 
@@ -192,6 +210,14 @@ export default function App() {
           <Route path="/customers/merge" element={<MergeDuplicatesPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/customers/:id/edit" element={<CustomerFormPage />} />
+        </Route>
+        <Route element={<PurchaseReturnsGate />}>
+          <Route element={<InitiatePurchaseReturnGate />}>
+            <Route path="/purchase-returns/new" element={<InitiateReturnPage />} />
+          </Route>
+          <Route path="/purchase-returns" element={<PurchaseReturnsListPage />} />
+          <Route path="/purchase-returns/pending" element={<PendingSettlementsPage />} />
+          <Route path="/purchase-returns/:id" element={<PurchaseReturnDetailPage />} />
         </Route>
         <Route element={<SalesReturnsGate />}>
           <Route element={<ProcessReturnGate />}>

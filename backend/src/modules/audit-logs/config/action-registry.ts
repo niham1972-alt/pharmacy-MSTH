@@ -80,6 +80,11 @@ export const ACTION_REGISTRY: ActionDef[] = [
   { actionKey: 'CUSTOMERS_MERGED', label: 'Customers merged', module: 'Customers', defaultSeverity: 'SENSITIVE' },
   { actionKey: 'CUSTOMER_TAG_ASSIGNED', label: 'Customer tag assigned', module: 'Customers', defaultSeverity: 'ROUTINE' },
 
+  // Module 9 — Purchase Returns
+  { actionKey: 'PURCHASE_RETURN_CREATED', label: 'Purchase return to supplier created', module: 'Purchase Returns', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'SETTLEMENT_STATUS_UPDATED', label: 'Purchase return settlement updated', module: 'Purchase Returns', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'QUALITY_RECALL_RETURN_LINKED', label: 'Recall-driven return linked', module: 'Purchase Returns', defaultSeverity: 'CRITICAL' },
+
   // Module 10 — Sales Returns
   { actionKey: 'RETURN_ELIGIBILITY_CHECKED', label: 'Return eligibility checked', module: 'Sales Returns', defaultSeverity: 'ROUTINE' },
   { actionKey: 'RETURN_CREATED', label: 'Sales return processed', module: 'Sales Returns', defaultSeverity: 'SENSITIVE' },

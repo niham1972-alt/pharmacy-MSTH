@@ -36,6 +36,9 @@ export function BatchDetailPage() {
         </div>
         <div className="flex gap-2">
           {CAN_RECALL.includes(user?.role ?? '') && !data.isRecalled && <button onClick={() => setShowRecall(true)} className="rounded-md border border-purple-300 dark:border-purple-800 px-3 py-1.5 text-sm text-purple-700 dark:text-purple-400">Flag Recall</button>}
+          {/* Return to supplier (Module 9) — pre-fills the GRN + this batch. An
+              alternative to writing off for stock the supplier will take back. */}
+          {CAN_WRITE_OFF.includes(user?.role ?? '') && data.currentQuantity > 0 && data.sourceGrnId && <Link to={`/purchase-returns/new?grnId=${data.sourceGrnId}&batchId=${id}`} className="rounded-md border border-blue-300 dark:border-blue-800 px-3 py-1.5 text-sm text-blue-700 dark:text-blue-400">Return to Supplier</Link>}
           {CAN_WRITE_OFF.includes(user?.role ?? '') && data.currentQuantity > 0 && <button onClick={() => setShowWriteOff(true)} className="rounded-md border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm text-red-700 dark:text-red-400">Write Off</button>}
         </div>
       </div>
