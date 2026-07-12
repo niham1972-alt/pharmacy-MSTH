@@ -14,7 +14,7 @@ interface CartState extends CartSnapshot {
   setLineDiscount: (medicineId: string, lineDiscount: number) => void;
   verifyPrescription: (medicineId: string, verifierId: string) => void;
   setCompliance: (medicineId: string, compliance: CartLine['compliance']) => void;
-  mergeBatchInfo: (info: Record<string, { fefoBatch: CartLine['fefoBatch']; currentStock: number }>) => void;
+  mergeBatchInfo: (info: Record<string, { fefoBatch: CartLine['fefoBatch']; currentStock: number; unitCost?: number }>) => void;
   removeLine: (medicineId: string) => void;
   setCartDiscount: (d: CartDiscount) => void;
   setCustomer: (id: string | null, name: string | null) => void;
@@ -40,7 +40,7 @@ export const useCartStore = create<CartState>((set) => ({
   setLineDiscount: (medicineId, lineDiscount) => set((s) => ({ lines: s.lines.map((l) => (l.medicineId === medicineId ? { ...l, lineDiscount: Math.max(0, lineDiscount) } : l)) })),
   verifyPrescription: (medicineId, verifierId) => set((s) => ({ lines: s.lines.map((l) => (l.medicineId === medicineId ? { ...l, prescriptionVerifiedBy: verifierId } : l)) })),
   setCompliance: (medicineId, compliance) => set((s) => ({ lines: s.lines.map((l) => (l.medicineId === medicineId ? { ...l, compliance } : l)) })),
-  mergeBatchInfo: (info) => set((s) => ({ lines: s.lines.map((l) => (info[l.medicineId] ? { ...l, fefoBatch: info[l.medicineId].fefoBatch, currentStock: info[l.medicineId].currentStock } : l)) })),
+  mergeBatchInfo: (info) => set((s) => ({ lines: s.lines.map((l) => (info[l.medicineId] ? { ...l, fefoBatch: info[l.medicineId].fefoBatch, currentStock: info[l.medicineId].currentStock, ...(info[l.medicineId].unitCost !== undefined ? { unitCost: info[l.medicineId].unitCost } : {}) } : l)) })),
   removeLine: (medicineId) => set((s) => ({ lines: s.lines.filter((l) => l.medicineId !== medicineId) })),
   setCartDiscount: (cartDiscount) => set({ cartDiscount }),
   setCustomer: (customerId, customerName) => set({ customerId, customerName }),

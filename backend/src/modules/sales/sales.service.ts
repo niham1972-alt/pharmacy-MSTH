@@ -46,17 +46,40 @@ export class SalesService {
     // FEFO preview via Module 6 — the soonest *sellable* batch (excludes expired
     // and recalled) that a sale would draw from.
     const fefoBatch = await this.batches.previewFefoBatches(user.pharmacyId, branchId, medIds);
-    const allowNegative = await this.settings.get<boolean>('sales.allowNegativeStock', { pharmacyId: user.pharmacyId, branchId });
+    const cfg = await this.settings.getMany(['sales.allowNegativeStock', 'sales.discount.autoApprovedPercent'], { pharmacyId: user.pharmacyId, branchId });
+    const allowNegative = cfg['sales.allowNegativeStock'] as boolean;
+    const autoApprovedPercent = cfg['sales.discount.autoApprovedPercent'] as number;
+    // Cost/profit are sensitive — never exposed to cashiers, not even in the payload.
+    const canSeeCost = user.role !== 'cashier';
 
     const lines = dto.items.map((it) => {
       const m = meds.get(it.medicineId)!;
       const unitPrice = this.resolvePrice(user, it, m);
       const line: LineInput = { unitPrice, quantity: it.quantity, discountAmount: it.discountAmount ?? 0, taxRatePercent: dec(m.taxRatePercent), taxInclusive: m.taxInclusive, unitCost: dec(m.costPrice) };
       const stockOk = allowNegative || m.currentStock >= it.quantity;
-      return { medicineId: it.medicineId, name: m.brandName ?? m.genericName, unitPrice, currentStock: m.currentStock, stockOk, prescriptionRequired: m.prescriptionRequired, controlled: !!m.controlledSubstanceSchedule, discontinued: m.status === 'DISCONTINUED', fefoBatch: fefoBatch.get(it.medicineId) ?? null, line };
+      // Strip unitCost from the returned line for cashiers (role-gated at the API,
+      // not just hidden in the UI).
+      const { unitCost, ...safeLine } = line;
+      return {
+        medicineId: it.medicineId,
+        name: m.brandName ?? m.genericName,
+        unitPrice,
+        currentStock: m.currentStock,
+        stockOk,
+        prescriptionRequired: m.prescriptionRequired,
+        controlled: !!m.controlledSubstanceSchedule,
+        discontinued: m.status === 'DISCONTINUED',
+        fefoBatch: fefoBatch.get(it.medicineId) ?? null,
+        line: safeLine,
+        ...(canSeeCost ? { unitCost } : {}),
+      };
     });
-    const { totals } = computeCart(lines.map((l) => l.line));
-    return { lines: lines.map(({ line, ...rest }) => ({ ...rest, ...line })), totals };
+    const { totals } = computeCart(lines.map((l, i) => ({ ...l.line, unitCost: canSeeCost ? dec(meds.get(dto.items[i].medicineId)!.costPrice) : 0 })));
+    return {
+      lines: lines.map(({ line, ...rest }) => ({ ...rest, ...line })),
+      totals: canSeeCost ? totals : { ...totals, totalCost: undefined },
+      autoApprovedPercent,
+    };
   }
 
   // -------------------------------------------------------------------------

@@ -37,6 +37,8 @@ export interface PriceCheckLine {
   controlled: boolean;
   discontinued: boolean;
   fefoBatch: { batchNumber: string; expiryDate: string } | null;
+  /** Present only for non-cashier roles (role-gated server-side). */
+  unitCost?: number;
 }
 
 export const posApi = {
@@ -45,7 +47,7 @@ export const posApi = {
   closeSession: (id: string, actualCash: number) => apiClient.post<SessionData>(`/sales/sessions/${id}/close`, { actualCash }),
   finalize: (payload: FinalizePayload) => apiClient.post<{ id: string; saleNumber: string }>('/sales', payload),
   discountApproval: (approverEmail: string, approverPassword: string) => apiClient.post<{ approverId: string; role: string }>('/sales/discount-approval', { approverEmail, approverPassword }),
-  priceCheck: (items: Array<{ medicineId: string; quantity: number }>) => apiClient.post<{ lines: PriceCheckLine[]; totals: { grandTotal: number } }>('/sales/cart/price-check', { items }),
+  priceCheck: (items: Array<{ medicineId: string; quantity: number }>) => apiClient.post<{ lines: PriceCheckLine[]; totals: { grandTotal: number }; autoApprovedPercent: number }>('/sales/cart/price-check', { items }),
   park: (label: string | undefined, cartSnapshot: unknown) => apiClient.post<{ id: string }>('/sales/parked', { label, cartSnapshot }),
   listParked: () => apiClient.get<Array<{ id: string; label: string | null; cartSnapshot: unknown; createdAt: string }>>('/sales/parked'),
   discardParked: (id: string) => apiClient.delete(`/sales/parked/${id}`),

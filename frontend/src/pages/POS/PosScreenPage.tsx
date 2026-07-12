@@ -14,7 +14,24 @@ import { ReceiptModal, ReceiptData } from '../../features/pos/components/Receipt
 import { ComplianceModal } from '../../features/pos/components/ComplianceModal';
 
 const ELEVATED = ['super_admin', 'admin', 'pharmacist'];
-const AUTO_DISCOUNT_PCT = 5; // mirrors backend POS_AUTO_DISCOUNT_PCT
+const AUTO_DISCOUNT_PCT = 5; // fallback until Settings' sales.discount.autoApprovedPercent loads
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/** Per-line profit view for admin/pharmacist. Returns null when cost is unknown
+ *  (cashier sessions never receive cost, so profit can't be reconstructed). */
+function computeLineProfit(l: { net: number; unitPrice: number; quantity: number; unitCost?: number; taxRatePercent?: number; taxInclusive?: boolean }) {
+  if (l.unitCost === undefined) return null;
+  const cost = round2(l.unitCost * l.quantity);
+  const profit = round2(l.net - cost);
+  const marginPct = l.net > 0 ? round2((profit / l.net) * 100) : profit < 0 ? -100 : 0;
+  const gross = l.unitPrice * l.quantity;
+  const rate = l.taxRatePercent ?? 0;
+  // Discount (of gross) at which this line's net revenue equals its cost.
+  const breakEvenDiscount = l.taxInclusive ? gross - cost * (1 + rate / 100) : gross - cost;
+  const breakEvenPct = gross > 0 ? Math.max(0, round2((breakEvenDiscount / gross) * 100)) : 0;
+  return { profit, marginPct, breakEvenPct, belowCost: profit <= 0 };
+}
 
 export function PosScreenPage() {
   const { user } = useAuth();
@@ -34,12 +51,18 @@ export function PosScreenPage() {
   const [finalizing, setFinalizing] = useState(false);
   const [showParked, setShowParked] = useState(false);
   const [complianceFor, setComplianceFor] = useState<string | null>(null);
+  const [autoDiscountPct, setAutoDiscountPct] = useState(AUTO_DISCOUNT_PCT);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const canElevate = ELEVATED.includes(user?.role ?? '');
+  const canSeeProfit = user?.role !== 'cashier'; // profit/margin hidden from cashiers everywhere
   const { finalLines, totals } = useMemo(() => buildCart(lines, cartDiscount), [lines, cartDiscount]);
   const discPct = useMemo(() => discountPercent(lines, cartDiscount), [lines, cartDiscount]);
-  const needsApproval = discPct > AUTO_DISCOUNT_PCT && !canElevate && !discountApprovedBy;
+  const needsApproval = discPct > autoDiscountPct && !canElevate && !discountApprovedBy;
+  const totalProfit = useMemo(
+    () => (canSeeProfit ? round2(finalLines.reduce((s, l) => s + (l.unitCost !== undefined ? l.net - l.unitCost * l.quantity : 0), 0)) : null),
+    [finalLines, canSeeProfit],
+  );
 
   // Keep a single payment line synced to the grand total (frictionless common case).
   useEffect(() => {
@@ -53,9 +76,10 @@ export function PosScreenPage() {
       posApi
         .priceCheck(lines.map((l) => ({ medicineId: l.medicineId, quantity: l.quantity })))
         .then((r) => {
-          const map: Record<string, { fefoBatch: CartLine['fefoBatch']; currentStock: number }> = {};
-          for (const pl of r.data.lines) map[pl.medicineId] = { fefoBatch: pl.fefoBatch, currentStock: pl.currentStock };
+          const map: Record<string, { fefoBatch: CartLine['fefoBatch']; currentStock: number; unitCost?: number }> = {};
+          for (const pl of r.data.lines) map[pl.medicineId] = { fefoBatch: pl.fefoBatch, currentStock: pl.currentStock, unitCost: pl.unitCost };
           store.mergeBatchInfo(map);
+          if (typeof r.data.autoApprovedPercent === 'number') setAutoDiscountPct(r.data.autoApprovedPercent);
         })
         .catch(() => undefined);
     }, 350);
@@ -249,6 +273,15 @@ export function PosScreenPage() {
                         {l.currentStock !== undefined && <span className={l.quantity > l.currentStock ? 'text-orange-600' : ''}>{l.quantity > l.currentStock ? '⚠ ' : ''}{l.currentStock} in stock</span>}
                         {l.fefoBatch && <span> · Batch {l.fefoBatch.batchNumber} · Exp {new Date(l.fefoBatch.expiryDate).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>}
                       </div>
+                      {canSeeProfit && (() => {
+                        const p = computeLineProfit(l);
+                        return p ? (
+                          <div className={`text-xs ${p.belowCost ? 'font-medium text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                            {p.belowCost && '⚠ '}Profit {formatCurrency(p.profit)} ({p.marginPct}%)
+                            <span className="text-gray-400"> · max auto-disc {autoDiscountPct}% · break-even {p.breakEvenPct}%</span>
+                          </div>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1">
@@ -287,6 +320,11 @@ export function PosScreenPage() {
             {totals.discountTotal > 0 && <div className="flex justify-between text-gray-500"><span>Discount</span><span>−{formatCurrency(totals.discountTotal)}</span></div>}
             <div className="flex justify-between text-gray-500"><span>Tax</span><span>{formatCurrency(totals.taxTotal)}</span></div>
             <div className="mt-1 flex justify-between text-lg font-semibold text-gray-900 dark:text-gray-100"><span>Grand Total</span><span>{formatCurrency(totals.grandTotal)}</span></div>
+            {canSeeProfit && totalProfit !== null && lines.length > 0 && (
+              <div className={`mt-0.5 flex justify-between text-xs ${totalProfit < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`} title="Internal — expected profit if this sale finalizes as configured">
+                <span>Total Profit {totalProfit < 0 && '(loss)'}</span><span className="tabular-nums">{formatCurrency(totalProfit)}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -310,7 +348,7 @@ export function PosScreenPage() {
                 {unfilledControlled.length ? 'Complete controlled-substance forms. ' : ''}
                 {needsApproval ? 'Discount needs approval. ' : ''}
                 {overStock.length ? 'Some items exceed stock. ' : ''}
-                {paid !== totals.grandTotal ? 'Payments must equal grand total.' : ''}
+                {paid !== totals.grandTotal ? `Payments (${formatCurrency(paid)}) must equal the grand total (${formatCurrency(totals.grandTotal)}).` : ''}
               </p>
             )}
             <button onClick={parkSale} disabled={lines.length === 0} className="mt-2 w-full rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm disabled:opacity-50">Park Sale</button>
@@ -326,7 +364,7 @@ function SearchAdd({ onAdd, searchRef }: { onAdd: (l: CartLine) => void; searchR
   const [term, setTerm] = useState('');
   const { data } = useMedicineSearch(term);
   const addAndRefocus = (l: CartLine) => { onAdd(l); setTerm(''); searchRef.current?.focus(); };
-  const toLine = (m: import('../../features/medicines/types/medicine.types').MedicineSearchResult): CartLine => ({ medicineId: m.id, name: m.name, unitPrice: m.sellingPrice, quantity: 1, taxRatePercent: m.taxRatePercent, taxInclusive: m.taxInclusive, currentStock: m.currentStock, prescriptionRequired: m.prescriptionRequired, controlled: m.controlled });
+  const toLine = (m: import('../../features/medicines/types/medicine.types').MedicineSearchResult): CartLine => ({ medicineId: m.id, name: m.name, unitPrice: m.sellingPrice, quantity: 1, taxRatePercent: m.taxRatePercent, taxInclusive: m.taxInclusive, unitCost: m.costPrice, currentStock: m.currentStock, prescriptionRequired: m.prescriptionRequired, controlled: m.controlled });
 
   return (
     <div>
@@ -367,7 +405,7 @@ function QuickPick({ onAdd }: { onAdd: (l: CartLine) => void }) {
         {tiles.map((m) => (
           <button
             key={m.id}
-            onClick={() => onAdd({ medicineId: m.id, name: m.name, unitPrice: m.sellingPrice, quantity: 1, taxRatePercent: m.taxRatePercent, currentStock: m.currentStock, prescriptionRequired: m.prescriptionRequired, controlled: !!m.controlledSubstanceSchedule })}
+            onClick={() => onAdd({ medicineId: m.id, name: m.name, unitPrice: m.sellingPrice, quantity: 1, taxRatePercent: m.taxRatePercent, taxInclusive: m.taxInclusive, unitCost: m.costPrice, currentStock: m.currentStock, prescriptionRequired: m.prescriptionRequired, controlled: !!m.controlledSubstanceSchedule })}
             className="rounded-full border border-gray-300 dark:border-gray-700 px-2 py-0.5 text-xs hover:border-brand-500"
           >
             {m.name}

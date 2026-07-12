@@ -508,6 +508,7 @@ export class MedicinesService {
       sellingPrice: dec(m.sellingPrice),
       mrp: dec(m.mrp),
       taxRatePercent: dec(m.taxRatePercent),
+      taxInclusive: m.taxInclusive,
       prescriptionRequired: m.prescriptionRequired,
       controlledSubstanceSchedule: m.controlledSubstanceSchedule,
       status: m.status,

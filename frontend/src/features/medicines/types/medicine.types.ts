@@ -25,6 +25,7 @@ export interface MedicineListItem {
   sellingPrice: number;
   mrp: number;
   taxRatePercent: number;
+  taxInclusive: boolean;
   prescriptionRequired: boolean;
   controlledSubstanceSchedule: string | null;
   status: MedicineStatus;
