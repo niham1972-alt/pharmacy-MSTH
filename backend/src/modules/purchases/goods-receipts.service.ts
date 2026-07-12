@@ -164,7 +164,10 @@ export class GoodsReceiptsService {
         branchId,
         grnNumber,
         purchaseOrderId: poId,
+        receivedDate: dto.receivedDate ? new Date(dto.receivedDate) : now,
         receivedBy: user.userId,
+        supplierInvoiceNumber: dto.supplierInvoiceNumber?.trim() || null,
+        supplierInvoiceDate: dto.supplierInvoiceDate ? new Date(dto.supplierInvoiceDate) : null,
         notes: dto.notes,
         hasVariance,
         varianceAcknowledgedBy: dto.varianceAcknowledged ? user.userId : null,
@@ -201,6 +204,18 @@ export class GoodsReceiptsService {
         },
       };
       const grn = await tx.goodsReceipt.create({ data: grnData, include: { items: true } });
+
+      // Attachments (supplier invoice scans etc.) linked to this GRN.
+      if (dto.attachments?.length) {
+        await tx.purchaseAttachment.createMany({
+          data: dto.attachments.map((a) => ({
+            goodsReceiptId: grn.id,
+            fileUrl: a.fileUrl,
+            fileType: a.fileType?.trim() || 'INVOICE',
+            uploadedBy: user.userId,
+          })),
+        });
+      }
 
       // 2-5. Per line: cost -> batch (Module 6, which records stock IN via Module 5) -> PO item received qty
       for (let idx = 0; idx < dto.items.length; idx++) {
@@ -324,7 +339,7 @@ export class GoodsReceiptsService {
   async getById(user: AuthenticatedUser, id: string) {
     const g = await this.prisma.goodsReceipt.findFirst({
       where: { id, pharmacyId: user.pharmacyId },
-      include: { items: true, purchaseOrder: { select: { poNumber: true, supplierId: true, supplier: { select: { companyName: true } } } } },
+      include: { items: true, attachments: true, purchaseOrder: { select: { poNumber: true, supplierId: true, supplier: { select: { companyName: true } } } } },
     });
     if (!g) throw new NotFoundException({ errorCode: 'GRN_NOT_FOUND', message: 'Goods receipt not found' });
     const medIds = [...new Set(g.items.map((i) => i.medicineId))];
@@ -337,6 +352,9 @@ export class GoodsReceiptsService {
       poNumber: g.purchaseOrder.poNumber,
       supplierName: g.purchaseOrder.supplier?.companyName ?? null,
       receivedDate: g.receivedDate.toISOString(),
+      supplierInvoiceNumber: g.supplierInvoiceNumber,
+      supplierInvoiceDate: g.supplierInvoiceDate ? g.supplierInvoiceDate.toISOString() : null,
+      attachments: g.attachments.map((a) => ({ id: a.id, fileUrl: a.fileUrl, fileType: a.fileType, uploadedAt: a.uploadedAt.toISOString() })),
       notes: g.notes,
       hasVariance: g.hasVariance,
       varianceNote: g.varianceNote,

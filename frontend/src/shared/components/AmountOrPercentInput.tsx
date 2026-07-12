@@ -1,9 +1,11 @@
 import { TaxDiscountMode } from '../pricing/grnPricing';
 
 /**
- * A numeric input paired with a %/₨ toggle, for values that can be entered either
- * as a percentage of some base or as a flat ("lumpsum") currency amount. Used for
- * GRN line- and invoice-level discount / sales tax / advance tax.
+ * A numeric input paired with an explicit two-option %/Rs segmented toggle, for
+ * values that can be entered either as a percentage of a base amount or as a flat
+ * ("lumpsum") currency amount. The active mode is highlighted so it's obvious the
+ * value can be switched. Used for GRN line- and invoice-level discount / sales tax
+ * / advance tax. Pass `base` to show the resolved currency amount as a hint.
  */
 export function AmountOrPercentInput({
   mode,
@@ -20,7 +22,22 @@ export function AmountOrPercentInput({
   ariaLabel?: string;
   compact?: boolean;
 }) {
-  const width = compact ? 'w-16' : 'w-24';
+  const width = compact ? 'w-14' : 'w-24';
+  const seg = (m: TaxDiscountMode, label: string) => (
+    <button
+      type="button"
+      onClick={() => onChange(m, value)}
+      aria-pressed={mode === m}
+      aria-label={`${ariaLabel ?? 'value'} as ${m === 'PERCENT' ? 'percentage' : 'flat amount'}`}
+      className={`px-1.5 text-xs font-semibold ${
+        mode === m
+          ? 'bg-brand-600 text-white'
+          : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+      }`}
+    >
+      {label}
+    </button>
+  );
   return (
     <div className={`inline-flex items-stretch overflow-hidden rounded-md border border-gray-300 dark:border-gray-700 ${className}`}>
       <input
@@ -32,15 +49,10 @@ export function AmountOrPercentInput({
         aria-label={ariaLabel}
         className={`${width} bg-white dark:bg-gray-800 px-2 py-1 text-sm outline-none`}
       />
-      <button
-        type="button"
-        onClick={() => onChange(mode === 'PERCENT' ? 'AMOUNT' : 'PERCENT', value)}
-        title={mode === 'PERCENT' ? 'Percentage — click for flat amount' : 'Flat amount — click for percentage'}
-        aria-label={`Switch to ${mode === 'PERCENT' ? 'flat amount' : 'percentage'}`}
-        className="border-l border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-2 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-      >
-        {mode === 'PERCENT' ? '%' : '₨'}
-      </button>
+      <div className="flex flex-col border-l border-gray-300 dark:border-gray-700 divide-y divide-gray-300 dark:divide-gray-700">
+        {seg('PERCENT', '%')}
+        {seg('AMOUNT', '₨')}
+      </div>
     </div>
   );
 }

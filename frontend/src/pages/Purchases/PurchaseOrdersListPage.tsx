@@ -39,7 +39,7 @@ export function PurchaseOrdersListPage() {
           )}
           {canManage && (
             <>
-              <Link to="/purchases/receive" className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm">Receive (Direct)</Link>
+              <Link to="/purchases/receive" className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm">+ Add New Stock</Link>
               <Link to="/purchases/new" className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700">+ New PO</Link>
             </>
           )}

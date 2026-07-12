@@ -95,6 +95,23 @@ export class GrnItemDto {
   expiryOverrideReason?: string;
 }
 
+export class GrnAttachmentDto {
+  /** Data-URL (base64) or external URL of the uploaded file. */
+  @IsString()
+  @Length(1, 5_000_000)
+  fileUrl!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  fileType?: string; // INVOICE | QUOTATION | OTHER
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 260)
+  fileName?: string;
+}
+
 export class CreateGrnDto {
   /** Present when receiving against a PO; omit for a direct (no-PO) receipt. */
   @IsOptional()
@@ -109,6 +126,26 @@ export class CreateGrnDto {
   @IsOptional()
   @IsUUID()
   branchId?: string;
+
+  /** Receipt date (defaults to now). */
+  @IsOptional()
+  @IsDateString()
+  receivedDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 100)
+  supplierInvoiceNumber?: string;
+
+  @IsOptional()
+  @IsDateString()
+  supplierInvoiceDate?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GrnAttachmentDto)
+  attachments?: GrnAttachmentDto[];
 
   @IsOptional()
   @IsString()

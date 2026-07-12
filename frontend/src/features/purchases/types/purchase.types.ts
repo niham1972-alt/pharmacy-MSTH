@@ -108,6 +108,14 @@ export interface GrnLineInput {
   advanceTaxValue?: number;
   expiryOverridden?: boolean;
   expiryOverrideReason?: string;
+
+  // UI-only reference fields (auto-filled from medicine detail; not persisted).
+  manufacturerName?: string;
+  availableQty?: number;
+  retailPrice?: number;
+  unitName?: string;
+  unitOptions?: string[];
+  conversionFactor?: number;
 }
 
 export interface GrnInvoiceAdjustments {

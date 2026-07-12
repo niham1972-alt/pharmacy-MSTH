@@ -894,6 +894,8 @@ model GoodsReceipt {
   purchaseOrderId        String
   receivedDate           DateTime             @default(now())
   receivedBy             String
+  supplierInvoiceNumber  String? // supplier's own invoice/bill number
+  supplierInvoiceDate    DateTime?
   notes                  String?
   hasVariance            Boolean              @default(false)
   varianceAcknowledgedBy String?

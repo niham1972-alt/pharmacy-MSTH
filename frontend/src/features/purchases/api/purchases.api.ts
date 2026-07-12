@@ -34,8 +34,20 @@ export const purchasesApi = {
   reject: (id: string, reason: string) => apiClient.post(`/purchases/orders/${id}/reject`, { reason }),
   cancel: (id: string, reason?: string) => apiClient.post(`/purchases/orders/${id}/cancel`, { reason }),
 
-  createGrn: (body: { purchaseOrderId?: string; supplierId?: string; notes?: string; items: GrnLineInput[]; varianceAcknowledged?: boolean; varianceNote?: string } & GrnInvoiceAdjustments) =>
-    apiClient.post(`/purchases/grn`, body),
+  createGrn: (
+    body: {
+      purchaseOrderId?: string;
+      supplierId?: string;
+      receivedDate?: string;
+      supplierInvoiceNumber?: string;
+      supplierInvoiceDate?: string;
+      attachments?: Array<{ fileUrl: string; fileType?: string; fileName?: string }>;
+      notes?: string;
+      items: GrnLineInput[];
+      varianceAcknowledged?: boolean;
+      varianceNote?: string;
+    } & GrnInvoiceAdjustments,
+  ) => apiClient.post(`/purchases/grn`, body),
   getGrn: (id: string) => apiClient.get(`/purchases/grn/${id}`),
 
   recordPayment: (id: string, body: { amount: number; method: string; referenceNumber?: string; notes?: string }) => apiClient.post(`/purchases/orders/${id}/payments`, body),

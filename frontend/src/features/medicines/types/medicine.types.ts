@@ -52,6 +52,7 @@ export interface MedicineDetail extends MedicineListItem {
   saleUnit: LookupRef;
   rackId: string | null;
   rack: LookupRef | null;
+  unitConversions: Array<{ id: string; fromUnitId: string; toUnitId: string; conversionFactor: number }>;
   taxInclusive: boolean;
   discountEligible: boolean;
   reorderQuantity: number;
