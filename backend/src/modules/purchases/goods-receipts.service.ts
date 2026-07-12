@@ -11,6 +11,7 @@ import { BatchesService } from '../batches/batches.service';
 import { paymentTermDays } from '../suppliers/payment-terms';
 import { CreateGrnDto } from './dto/create-grn.dto';
 import { dec } from './purchase-orders.service';
+import { computeInvoice, computeLine } from './grn-pricing';
 
 @Injectable()
 export class GoodsReceiptsService {
@@ -93,6 +94,22 @@ export class GoodsReceiptsService {
       throw new BadRequestException({ errorCode: 'VARIANCE_REQUIRES_ACK', message: `Cost variance of ${maxVariance.toFixed(1)}% exceeds the ${cfg.varianceBlockPercent}% limit. Acknowledge to proceed.` });
     }
 
+    // --- Server-authoritative pricing (recomputed, never trusted from client) --
+    const lineComputed = dto.items.map((i) =>
+      computeLine({
+        actualUnitCost: i.actualUnitCost,
+        receivedQuantity: i.receivedQuantity,
+        looseUnitQuantity: i.looseUnitQuantity ?? 0,
+        discountMode: i.discountMode,
+        discountValue: i.discountValue,
+        salesTaxMode: i.salesTaxMode,
+        salesTaxValue: i.salesTaxValue,
+        advanceTaxMode: i.advanceTaxMode,
+        advanceTaxValue: i.advanceTaxValue,
+      }),
+    );
+    const invoiceComputed = computeInvoice(lineComputed.map((l) => l.net), dto);
+
     // --- Transaction --------------------------------------------------------
     const result = await this.prisma.$transaction(async (tx) => {
       const grnNumber = await this.repo.nextNumber(tx, user.pharmacyId, 'GRN');
@@ -104,7 +121,6 @@ export class GoodsReceiptsService {
       if (isDirect) {
         const poNumber = await this.repo.nextNumber(tx, user.pharmacyId, 'PO');
         const supplier = await tx.supplier.findUnique({ where: { id: dto.supplierId! } });
-        const subTotal = dto.items.reduce((s, i) => s + i.receivedQuantity * i.actualUnitCost, 0);
         const created = await tx.purchaseOrder.create({
           data: {
             pharmacyId: user.pharmacyId,
@@ -115,18 +131,18 @@ export class GoodsReceiptsService {
             isDirectGrn: true,
             orderDate: now,
             dueDate: new Date(now.getTime() + paymentTermDays(supplier?.paymentTermsCode) * 86400000),
-            subTotal,
-            grandTotal: subTotal,
+            subTotal: invoiceComputed.subTotal,
+            grandTotal: invoiceComputed.grandTotal,
             createdBy: user.userId,
             approvedBy: 'DIRECT_GRN',
             approvedAt: now,
             items: {
-              create: dto.items.map((i) => ({
+              create: dto.items.map((i, idx) => ({
                 medicineId: i.medicineId,
                 orderedQuantity: i.receivedQuantity,
                 receivedQuantity: i.receivedQuantity,
                 expectedUnitCost: i.actualUnitCost,
-                lineTotal: i.receivedQuantity * i.actualUnitCost,
+                lineTotal: lineComputed[idx].net,
               })),
             },
           },
@@ -153,15 +169,32 @@ export class GoodsReceiptsService {
         hasVariance,
         varianceAcknowledgedBy: dto.varianceAcknowledged ? user.userId : null,
         varianceNote: dto.varianceNote,
+        invoiceDiscountMode: dto.invoiceDiscountMode ?? 'AMOUNT',
+        invoiceDiscountValue: dto.invoiceDiscountValue ?? 0,
+        invoiceSalesTaxMode: dto.invoiceSalesTaxMode ?? 'PERCENT',
+        invoiceSalesTaxValue: dto.invoiceSalesTaxValue ?? 0,
+        invoiceAdvanceTaxMode: dto.invoiceAdvanceTaxMode ?? 'AMOUNT',
+        invoiceAdvanceTaxValue: dto.invoiceAdvanceTaxValue ?? 0,
+        subTotal: invoiceComputed.subTotal,
+        grandTotal: invoiceComputed.grandTotal,
         items: {
-          create: dto.items.map((i) => ({
+          create: dto.items.map((i, idx) => ({
             purchaseOrderItemId: i.purchaseOrderItemId!,
             medicineId: i.medicineId,
             receivedQuantity: i.receivedQuantity,
+            looseUnitQuantity: i.looseUnitQuantity ?? 0,
             freeQuantity: i.freeQuantity ?? 0,
             batchNumber: i.batchNumber,
             expiryDate: new Date(i.expiryDate),
             actualUnitCost: i.actualUnitCost,
+            rackId: i.rackId ?? null,
+            discountMode: i.discountMode ?? 'AMOUNT',
+            discountValue: i.discountValue ?? 0,
+            salesTaxMode: i.salesTaxMode ?? 'PERCENT',
+            salesTaxValue: i.salesTaxValue ?? 0,
+            advanceTaxMode: i.advanceTaxMode ?? 'AMOUNT',
+            advanceTaxValue: i.advanceTaxValue ?? 0,
+            lineNetTotal: lineComputed[idx].net,
             expiryOverridden: i.expiryOverridden ?? false,
             expiryOverrideReason: i.expiryOverrideReason,
           })),
@@ -172,7 +205,9 @@ export class GoodsReceiptsService {
       // 2-5. Per line: cost -> batch (Module 6, which records stock IN via Module 5) -> PO item received qty
       for (let idx = 0; idx < dto.items.length; idx++) {
         const i = dto.items[idx];
-        const totalUnits = i.receivedQuantity + (i.freeQuantity ?? 0);
+        // Loose units are billed stock; bonus (free) units are unbilled stock.
+        const billedUnits = i.receivedQuantity + (i.looseUnitQuantity ?? 0);
+        const totalUnits = billedUnits + (i.freeQuantity ?? 0);
         const med = await tx.medicine.findUnique({ where: { id: i.medicineId }, select: { currentStock: true, costPrice: true } });
         if (!med) throw new BadRequestException({ errorCode: 'INVALID_MEDICINE', message: `Medicine ${i.medicineId} not found.` });
 
@@ -182,7 +217,7 @@ export class GoodsReceiptsService {
           oldStock: med.currentStock,
           oldCost: dec(med.costPrice),
           actualUnitCost: i.actualUnitCost,
-          receivedQuantity: i.receivedQuantity,
+          receivedQuantity: billedUnits,
           freeQuantity: i.freeQuantity ?? 0,
           rule: cfg.costingRule,
           changedBy: user.userId,
@@ -305,15 +340,32 @@ export class GoodsReceiptsService {
       notes: g.notes,
       hasVariance: g.hasVariance,
       varianceNote: g.varianceNote,
+      invoiceDiscountMode: g.invoiceDiscountMode,
+      invoiceDiscountValue: dec(g.invoiceDiscountValue),
+      invoiceSalesTaxMode: g.invoiceSalesTaxMode,
+      invoiceSalesTaxValue: dec(g.invoiceSalesTaxValue),
+      invoiceAdvanceTaxMode: g.invoiceAdvanceTaxMode,
+      invoiceAdvanceTaxValue: dec(g.invoiceAdvanceTaxValue),
+      subTotal: dec(g.subTotal),
+      grandTotal: dec(g.grandTotal),
       items: g.items.map((i) => ({
         id: i.id,
         medicineId: i.medicineId,
         medicineName: nameOf.get(i.medicineId) ?? i.medicineId,
         receivedQuantity: i.receivedQuantity,
+        looseUnitQuantity: i.looseUnitQuantity,
         freeQuantity: i.freeQuantity,
         batchNumber: i.batchNumber,
         expiryDate: i.expiryDate.toISOString(),
         actualUnitCost: dec(i.actualUnitCost),
+        rackId: i.rackId,
+        discountMode: i.discountMode,
+        discountValue: dec(i.discountValue),
+        salesTaxMode: i.salesTaxMode,
+        salesTaxValue: dec(i.salesTaxValue),
+        advanceTaxMode: i.advanceTaxMode,
+        advanceTaxValue: dec(i.advanceTaxValue),
+        lineNetTotal: dec(i.lineNetTotal),
         expiryOverridden: i.expiryOverridden,
       })),
     };

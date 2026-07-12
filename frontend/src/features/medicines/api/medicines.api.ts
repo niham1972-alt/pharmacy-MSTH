@@ -69,13 +69,14 @@ export const lookupsApi = {
   manufacturers: () => apiClient.get<Lookup[]>('/medicine-manufacturers'),
   dosageForms: () => apiClient.get<Lookup[]>('/medicine-dosage-forms'),
   units: () => apiClient.get<Lookup[]>('/medicine-units'),
+  racks: () => apiClient.get<Lookup[]>('/medicine-racks'),
 
   create: (kind: LookupKind, body: Record<string, unknown>) => apiClient.post<Lookup>(lookupPath(kind), body),
   update: (kind: LookupKind, id: string, body: Record<string, unknown>) => apiClient.put<Lookup>(`${lookupPath(kind)}/${id}`, body),
   remove: (kind: LookupKind, id: string) => apiClient.delete(`${lookupPath(kind)}/${id}`),
 };
 
-export type LookupKind = 'categories' | 'manufacturers' | 'dosageForms' | 'units';
+export type LookupKind = 'categories' | 'manufacturers' | 'dosageForms' | 'units' | 'racks';
 
 export function lookupPath(kind: LookupKind): string {
   switch (kind) {
@@ -87,5 +88,7 @@ export function lookupPath(kind: LookupKind): string {
       return '/medicine-dosage-forms';
     case 'units':
       return '/medicine-units';
+    case 'racks':
+      return '/medicine-racks';
   }
 }

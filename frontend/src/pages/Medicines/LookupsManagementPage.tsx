@@ -9,6 +9,7 @@ const TABS: Array<[LookupKind, string]> = [
   ['manufacturers', 'Manufacturers'],
   ['dosageForms', 'Dosage Forms'],
   ['units', 'Units'],
+  ['racks', 'Racks'],
 ];
 
 export function LookupsManagementPage() {

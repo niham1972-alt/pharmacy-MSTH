@@ -20,6 +20,7 @@ export class MedicinesRepository {
     baseUnit: true,
     purchaseUnit: true,
     saleUnit: true,
+    rack: true,
     barcodes: true,
     unitConversions: true,
   } satisfies Prisma.MedicineInclude;

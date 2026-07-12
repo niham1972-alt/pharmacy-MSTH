@@ -459,6 +459,9 @@ model Medicine {
   saleUnitId      String
   unitConversions MedicineUnitConversion[]
 
+  // Physical storage location (shelf/rack). Optional lookup — Module 2 extension.
+  rackId String?
+
   // Pricing
   costPrice        Decimal @default(0) @db.Decimal(12, 2)
   mrp              Decimal @default(0) @db.Decimal(12, 2)
@@ -493,6 +496,7 @@ model Medicine {
   baseUnit     Unit              @relation("baseUnit", fields: [baseUnitId], references: [id])
   purchaseUnit Unit              @relation("purchaseUnit", fields: [purchaseUnitId], references: [id])
   saleUnit     Unit              @relation("saleUnit", fields: [saleUnitId], references: [id])
+  rack         Rack?             @relation(fields: [rackId], references: [id])
   barcodes     MedicineBarcode[]
   priceHistory PriceHistory[]
 
@@ -537,6 +541,30 @@ model Unit {
   saleFor     Medicine[] @relation("saleUnit")
 
   @@unique([pharmacyId, name])
+}
+
+/// Physical storage location (shelf / rack / bin). A lightweight Module 2 lookup,
+/// quick-addable inline from the Add Medicine and GRN screens.
+model Rack {
+  id          String     @id @default(uuid())
+  pharmacyId  String
+  branchId    String? // null = shared across branches
+  name        String // "R-01", "Cold Chain A", "Front Counter"
+  description String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  medicines   Medicine[]
+
+  @@unique([pharmacyId, name])
+  @@index([pharmacyId, isActive])
+}
+
+/// How a discount / tax value is interpreted: a percentage of the base, or a flat
+/// currency amount ("lumpsum"). Used at both GRN line and invoice level.
+enum TaxDiscountMode {
+  PERCENT
+  AMOUNT
 }
 
 model Category {
@@ -870,6 +898,17 @@ model GoodsReceipt {
   hasVariance            Boolean              @default(false)
   varianceAcknowledgedBy String?
   varianceNote           String?
+
+  // Invoice-level (bulk) adjustments applied after summing all line nets.
+  invoiceDiscountMode    TaxDiscountMode @default(AMOUNT)
+  invoiceDiscountValue   Decimal         @default(0) @db.Decimal(14, 2)
+  invoiceSalesTaxMode    TaxDiscountMode @default(PERCENT)
+  invoiceSalesTaxValue   Decimal         @default(0) @db.Decimal(14, 2)
+  invoiceAdvanceTaxMode  TaxDiscountMode @default(AMOUNT)
+  invoiceAdvanceTaxValue Decimal         @default(0) @db.Decimal(14, 2)
+  subTotal               Decimal         @default(0) @db.Decimal(14, 2) // sum of line nets
+  grandTotal             Decimal         @default(0) @db.Decimal(14, 2) // after invoice-level adjustments
+
   createdAt              DateTime             @default(now())
   purchaseOrder          PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   items                  GoodsReceiptItem[]
@@ -885,11 +924,24 @@ model GoodsReceiptItem {
   goodsReceiptId       String
   purchaseOrderItemId  String
   medicineId           String
-  receivedQuantity     Int
-  freeQuantity         Int          @default(0)
+  receivedQuantity     Int // full packs (purchase units) received
+  looseUnitQuantity    Int          @default(0) // extra loose base-units on top of full packs
+  freeQuantity         Int          @default(0) // bonus / free packs (not billed)
   batchNumber          String
   expiryDate           DateTime
   actualUnitCost       Decimal      @db.Decimal(12, 2)
+  rackId               String? // where this batch is shelved (no FK — free-form placement)
+
+  // Per-line discount / sales tax / advance tax. Each stores the raw entered
+  // value plus how to read it (percent of line gross, or a flat amount).
+  discountMode    TaxDiscountMode @default(AMOUNT)
+  discountValue   Decimal         @default(0) @db.Decimal(12, 2)
+  salesTaxMode    TaxDiscountMode @default(PERCENT)
+  salesTaxValue   Decimal         @default(0) @db.Decimal(12, 2)
+  advanceTaxMode  TaxDiscountMode @default(AMOUNT)
+  advanceTaxValue Decimal         @default(0) @db.Decimal(12, 2)
+  lineNetTotal    Decimal         @default(0) @db.Decimal(14, 2) // computed: gross - discount + salesTax + advanceTax
+
   expiryOverridden     Boolean      @default(false)
   expiryOverrideReason String?
   goodsReceipt         GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)

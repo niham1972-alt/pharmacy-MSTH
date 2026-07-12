@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../../common/audit/audit-log.interface';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
-import { CategoryDto, DosageFormDto, ManufacturerDto, UnitDto } from './dto/lookup.dto';
+import { CategoryDto, DosageFormDto, ManufacturerDto, RackDto, UnitDto } from './dto/lookup.dto';
 
 /**
  * CRUD for the four Medicine lookup entities. Every delete is guarded: a lookup
@@ -176,8 +176,47 @@ export class MedicineLookupsService {
     return { id, deleted: true };
   }
 
+  // --- Racks ---------------------------------------------------------------
+  racks(pharmacyId: string) {
+    return this.prisma.rack.findMany({ where: { pharmacyId }, orderBy: { name: 'asc' } });
+  }
+
+  async createRack(user: AuthenticatedUser, dto: RackDto) {
+    try {
+      const created = await this.prisma.rack.create({
+        data: { pharmacyId: user.pharmacyId, branchId: user.branchId, name: dto.name, description: dto.description, isActive: dto.isActive ?? true },
+      });
+      await this.log(user, 'RACK_CREATED', 'RACK', created.id, { name: dto.name });
+      return created;
+    } catch (err) {
+      this.handleUnique(err, dto.name);
+    }
+  }
+
+  async updateRack(user: AuthenticatedUser, id: string, dto: RackDto) {
+    await this.ensureExists('rack', user.pharmacyId, id);
+    try {
+      const updated = await this.prisma.rack.update({ where: { id }, data: { name: dto.name, description: dto.description, isActive: dto.isActive } });
+      await this.log(user, 'RACK_UPDATED', 'RACK', id, { name: dto.name });
+      return updated;
+    } catch (err) {
+      this.handleUnique(err, dto.name);
+    }
+  }
+
+  async deleteRack(user: AuthenticatedUser, id: string) {
+    await this.ensureExists('rack', user.pharmacyId, id);
+    const inUse = await this.prisma.medicine.count({ where: { rackId: id } });
+    if (inUse > 0) {
+      throw new ConflictException({ errorCode: 'LOOKUP_IN_USE', message: `Cannot delete: rack is assigned to ${inUse} medicine(s).`, data: { dependentCount: inUse } });
+    }
+    await this.prisma.rack.delete({ where: { id } });
+    await this.log(user, 'RACK_DELETED', 'RACK', id);
+    return { id, deleted: true };
+  }
+
   // --- Shared guards -------------------------------------------------------
-  private async ensureExists(model: 'category' | 'manufacturer' | 'dosageForm' | 'unit', pharmacyId: string, id: string) {
+  private async ensureExists(model: 'category' | 'manufacturer' | 'dosageForm' | 'unit' | 'rack', pharmacyId: string, id: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const found = await (this.prisma[model] as any).findFirst({ where: { id, pharmacyId }, select: { id: true } });
     if (!found) throw new NotFoundException({ errorCode: 'LOOKUP_NOT_FOUND', message: 'Lookup entry not found' });

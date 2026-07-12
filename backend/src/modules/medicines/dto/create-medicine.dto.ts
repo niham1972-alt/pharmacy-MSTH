@@ -3,6 +3,7 @@ import {
   ArrayUnique,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsInt,
   IsNumber,
   IsOptional,
@@ -54,6 +55,11 @@ export class CreateMedicineDto {
 
   @IsUUID()
   saleUnitId!: string;
+
+  /** Default physical storage location (shelf/rack). */
+  @IsOptional()
+  @IsUUID()
+  rackId?: string;
 
   @IsOptional()
   @IsString()
@@ -130,6 +136,24 @@ export class CreateMedicineDto {
   @IsInt()
   @Min(0)
   currentStock?: number;
+
+  /** Opening stock: when > 0, an OPENING batch is created so the quantity is
+   * immediately sellable (goes through Inventory + Batches). */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  openingStock?: number;
+
+  /** Expiry for the opening batch. Required by Batches when openingStock > 0;
+   * defaults to +2 years if omitted. */
+  @IsOptional()
+  @IsDateString()
+  openingStockExpiry?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 60)
+  openingStockBatchNumber?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -208,6 +232,10 @@ export class UpdateMedicineDto {
   @IsOptional()
   @IsUUID()
   saleUnitId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  rackId?: string;
 
   @IsOptional()
   @IsString()

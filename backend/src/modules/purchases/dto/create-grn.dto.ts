@@ -1,9 +1,11 @@
 import { Type } from 'class-transformer';
+import { TaxDiscountMode } from '@prisma/client';
 import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -27,6 +29,13 @@ export class GrnItemDto {
   @Min(1)
   receivedQuantity!: number;
 
+  /** Extra loose base-units received on top of the full packs. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  looseUnitQuantity?: number;
+
+  /** Bonus / free packs (not billed). */
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -42,6 +51,39 @@ export class GrnItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   actualUnitCost!: number;
+
+  /** Where this batch is shelved. */
+  @IsOptional()
+  @IsUUID()
+  rackId?: string;
+
+  // --- Per-line adjustments (mode = how to read the value) ------------------
+  @IsOptional()
+  @IsEnum(TaxDiscountMode)
+  discountMode?: TaxDiscountMode;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  discountValue?: number;
+
+  @IsOptional()
+  @IsEnum(TaxDiscountMode)
+  salesTaxMode?: TaxDiscountMode;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  salesTaxValue?: number;
+
+  @IsOptional()
+  @IsEnum(TaxDiscountMode)
+  advanceTaxMode?: TaxDiscountMode;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  advanceTaxValue?: number;
 
   @IsOptional()
   @IsBoolean()
@@ -78,6 +120,34 @@ export class CreateGrnDto {
   @ValidateNested({ each: true })
   @Type(() => GrnItemDto)
   items!: GrnItemDto[];
+
+  // --- Invoice-level (bulk) adjustments, applied after summing line nets -----
+  @IsOptional()
+  @IsEnum(TaxDiscountMode)
+  invoiceDiscountMode?: TaxDiscountMode;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  invoiceDiscountValue?: number;
+
+  @IsOptional()
+  @IsEnum(TaxDiscountMode)
+  invoiceSalesTaxMode?: TaxDiscountMode;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  invoiceSalesTaxValue?: number;
+
+  @IsOptional()
+  @IsEnum(TaxDiscountMode)
+  invoiceAdvanceTaxMode?: TaxDiscountMode;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  invoiceAdvanceTaxValue?: number;
 
   /** Acknowledge a cost variance beyond the hard-block threshold. */
   @IsOptional()

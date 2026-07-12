@@ -6,6 +6,7 @@ import { formatCurrency } from '../../features/dashboard/utils/formatCurrency';
 import { useMedicinesList } from '../../features/medicines/hooks/useMedicines';
 import { useLookups } from '../../features/medicines/hooks/useLookups';
 import { StockStatusBadge, StatusBadge } from '../../features/medicines/components/StockStatusBadge';
+import { MedicineFormModal } from '../../features/medicines/components/MedicineFormModal';
 
 const CAN_EDIT = ['super_admin', 'admin', 'pharmacist', 'inventory_manager'];
 const CAN_MANAGE = ['super_admin', 'admin', 'inventory_manager'];
@@ -24,6 +25,7 @@ export function MedicinesListPage() {
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+  const [showAdd, setShowAdd] = useState(false);
 
   const canEdit = CAN_EDIT.includes(user?.role ?? '');
   const canManage = CAN_MANAGE.includes(user?.role ?? '');
@@ -76,9 +78,9 @@ export function MedicinesListPage() {
             </Link>
           )}
           {canEdit && (
-            <Link to="/medicines/new" className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700">
+            <button type="button" onClick={() => setShowAdd(true)} className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700">
               + Add Medicine
-            </Link>
+            </button>
           )}
         </div>
       </div>
@@ -160,7 +162,7 @@ export function MedicinesListPage() {
                   {hasFilters ? 'No medicines match your filters.' : 'No medicines yet.'}
                   {canEdit && !hasFilters && (
                     <div className="mt-2">
-                      <Link to="/medicines/new" className="text-brand-600 dark:text-brand-400 underline">Add your first product</Link>
+                      <button type="button" onClick={() => setShowAdd(true)} className="text-brand-600 dark:text-brand-400 underline">Add your first product</button>
                     </div>
                   )}
                 </td>
@@ -201,6 +203,13 @@ export function MedicinesListPage() {
             <button disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)} className="rounded border border-gray-300 dark:border-gray-700 px-2 py-1 disabled:opacity-40">Next</button>
           </div>
         </div>
+      )}
+
+      {showAdd && (
+        <MedicineFormModal
+          onClose={() => setShowAdd(false)}
+          onSaved={(id) => { setShowAdd(false); navigate(`/medicines/${id}`); }}
+        />
       )}
     </div>
   );

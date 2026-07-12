@@ -50,6 +50,8 @@ export interface MedicineDetail extends MedicineListItem {
   baseUnit: LookupRef;
   purchaseUnit: LookupRef;
   saleUnit: LookupRef;
+  rackId: string | null;
+  rack: LookupRef | null;
   taxInclusive: boolean;
   discountEligible: boolean;
   reorderQuantity: number;
@@ -104,6 +106,7 @@ export interface MedicineFormValues {
   baseUnitId: string;
   purchaseUnitId: string;
   saleUnitId: string;
+  rackId?: string;
   strength?: string;
   routeOfAdministration?: string;
   therapeuticClass?: string;
@@ -118,6 +121,9 @@ export interface MedicineFormValues {
   reorderQuantity?: number;
   maxStockLevel?: number;
   currentStock?: number;
+  openingStock?: number;
+  openingStockExpiry?: string;
+  openingStockBatchNumber?: string;
   barcodes?: string[];
   confirmNegativeMargin?: boolean;
   confirmDuplicate?: boolean;

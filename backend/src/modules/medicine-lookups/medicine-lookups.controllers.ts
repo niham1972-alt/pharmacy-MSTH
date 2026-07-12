@@ -6,7 +6,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { ControllerResult } from '../../common/interceptors/response-envelope.interceptor';
 import { MedicineLookupsService } from './medicine-lookups.service';
-import { CategoryDto, DosageFormDto, ManufacturerDto, UnitDto } from './dto/lookup.dto';
+import { CategoryDto, DosageFormDto, ManufacturerDto, RackDto, UnitDto } from './dto/lookup.dto';
 
 const READ_ROLES = ['super_admin', 'admin', 'pharmacist', 'inventory_manager', 'cashier', 'accountant', 'auditor'] as const;
 const WRITE_ROLES = ['super_admin', 'admin', 'inventory_manager'] as const;
@@ -128,5 +128,35 @@ export class UnitsController {
   @Roles(...WRITE_ROLES)
   async remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Promise<ControllerResult<unknown>> {
     return { data: await this.service.deleteUnit(user, id), message: 'Unit deleted' };
+  }
+}
+
+@Controller('medicine-racks')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class RacksController {
+  constructor(private readonly service: MedicineLookupsService) {}
+
+  @Get()
+  @Roles(...READ_ROLES)
+  async list(@CurrentUser() user: AuthenticatedUser): Promise<ControllerResult<unknown>> {
+    return { data: await this.service.racks(user.pharmacyId), message: 'Racks fetched' };
+  }
+
+  @Post()
+  @Roles(...WRITE_ROLES)
+  async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: RackDto): Promise<ControllerResult<unknown>> {
+    return { data: await this.service.createRack(user, dto), message: 'Rack created' };
+  }
+
+  @Put(':id')
+  @Roles(...WRITE_ROLES)
+  async update(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: RackDto): Promise<ControllerResult<unknown>> {
+    return { data: await this.service.updateRack(user, id, dto), message: 'Rack updated' };
+  }
+
+  @Delete(':id')
+  @Roles(...WRITE_ROLES)
+  async remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Promise<ControllerResult<unknown>> {
+    return { data: await this.service.deleteRack(user, id), message: 'Rack deleted' };
   }
 }

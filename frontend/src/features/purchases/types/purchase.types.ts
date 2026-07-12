@@ -84,6 +84,8 @@ export interface POLineInput {
   taxRatePercent?: number;
 }
 
+export type TaxDiscountMode = 'PERCENT' | 'AMOUNT';
+
 export interface GrnLineInput {
   purchaseOrderItemId?: string;
   medicineId: string;
@@ -91,11 +93,28 @@ export interface GrnLineInput {
   orderedQuantity?: number;
   alreadyReceived?: number;
   receivedQuantity: number;
+  looseUnitQuantity?: number;
   freeQuantity: number;
   batchNumber: string;
   expiryDate: string;
   actualUnitCost: number;
   expectedUnitCost?: number;
+  rackId?: string;
+  discountMode?: TaxDiscountMode;
+  discountValue?: number;
+  salesTaxMode?: TaxDiscountMode;
+  salesTaxValue?: number;
+  advanceTaxMode?: TaxDiscountMode;
+  advanceTaxValue?: number;
   expiryOverridden?: boolean;
   expiryOverrideReason?: string;
+}
+
+export interface GrnInvoiceAdjustments {
+  invoiceDiscountMode?: TaxDiscountMode;
+  invoiceDiscountValue?: number;
+  invoiceSalesTaxMode?: TaxDiscountMode;
+  invoiceSalesTaxValue?: number;
+  invoiceAdvanceTaxMode?: TaxDiscountMode;
+  invoiceAdvanceTaxValue?: number;
 }

@@ -6,18 +6,20 @@ export function useLookups() {
   const manufacturers = useQuery({ queryKey: ['lookups', 'manufacturers'], queryFn: async () => (await lookupsApi.manufacturers()).data, staleTime: 5 * 60_000 });
   const dosageForms = useQuery({ queryKey: ['lookups', 'dosageForms'], queryFn: async () => (await lookupsApi.dosageForms()).data, staleTime: 5 * 60_000 });
   const units = useQuery({ queryKey: ['lookups', 'units'], queryFn: async () => (await lookupsApi.units()).data, staleTime: 5 * 60_000 });
+  const racks = useQuery({ queryKey: ['lookups', 'racks'], queryFn: async () => (await lookupsApi.racks()).data, staleTime: 5 * 60_000 });
 
   return {
     categories: categories.data ?? [],
     manufacturers: manufacturers.data ?? [],
     dosageForms: dosageForms.data ?? [],
     units: units.data ?? [],
+    racks: racks.data ?? [],
     isLoading: categories.isLoading || manufacturers.isLoading || dosageForms.isLoading || units.isLoading,
   };
 }
 
 export function useLookupQuery(kind: LookupKind) {
-  const map = { categories: lookupsApi.categories, manufacturers: lookupsApi.manufacturers, dosageForms: lookupsApi.dosageForms, units: lookupsApi.units };
+  const map = { categories: lookupsApi.categories, manufacturers: lookupsApi.manufacturers, dosageForms: lookupsApi.dosageForms, units: lookupsApi.units, racks: lookupsApi.racks };
   return useQuery({ queryKey: ['lookups', kind], queryFn: async () => (await map[kind]()).data });
 }
 

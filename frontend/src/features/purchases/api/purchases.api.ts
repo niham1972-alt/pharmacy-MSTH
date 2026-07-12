@@ -1,5 +1,5 @@
 import { apiClient } from '../../../shared/api/client';
-import { GrnLineInput, PODetail, POLineInput, POListItem, PendingApproval, PurchaseSummary, Supplier } from '../types/purchase.types';
+import { GrnInvoiceAdjustments, GrnLineInput, PODetail, POLineInput, POListItem, PendingApproval, PurchaseSummary, Supplier } from '../types/purchase.types';
 
 function qs(params: object): string {
   const s = new URLSearchParams();
@@ -34,7 +34,7 @@ export const purchasesApi = {
   reject: (id: string, reason: string) => apiClient.post(`/purchases/orders/${id}/reject`, { reason }),
   cancel: (id: string, reason?: string) => apiClient.post(`/purchases/orders/${id}/cancel`, { reason }),
 
-  createGrn: (body: { purchaseOrderId?: string; supplierId?: string; notes?: string; items: GrnLineInput[]; varianceAcknowledged?: boolean; varianceNote?: string }) =>
+  createGrn: (body: { purchaseOrderId?: string; supplierId?: string; notes?: string; items: GrnLineInput[]; varianceAcknowledged?: boolean; varianceNote?: string } & GrnInvoiceAdjustments) =>
     apiClient.post(`/purchases/grn`, body),
   getGrn: (id: string) => apiClient.get(`/purchases/grn/${id}`),
 

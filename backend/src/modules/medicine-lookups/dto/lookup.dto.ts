@@ -48,3 +48,18 @@ export class UnitDto {
   @Length(0, 20)
   symbol?: string;
 }
+
+export class RackDto {
+  @IsString()
+  @Length(1, 80)
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 300)
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}

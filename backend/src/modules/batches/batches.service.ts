@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { BatchStatus, Prisma } from '@prisma/client';
+import { BatchStatus, Prisma, StockReasonCode } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../../common/audit/audit-log.interface';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
@@ -33,6 +33,8 @@ export interface CreateOrAppendBatchParams {
   expiryOverrideReason?: string | null;
   referenceModule?: string;
   referenceId?: string;
+  /** Ledger reason for the stock-in. Defaults to PURCHASE_RECEIPT (GRN path). */
+  reasonCode?: StockReasonCode;
   performedBy: string;
 }
 
@@ -178,7 +180,7 @@ export class BatchesService {
           batchId: row.id,
           quantity: params.quantity,
           unitCost: params.unitCost,
-          reasonCode: 'PURCHASE_RECEIPT',
+          reasonCode: params.reasonCode ?? 'PURCHASE_RECEIPT',
           referenceModule: params.referenceModule ?? 'PURCHASE',
           referenceId: params.referenceId ?? row.id,
           performedBy: params.performedBy,

@@ -11,6 +11,7 @@ import { AuditLogService } from '../../common/audit/audit-log.interface';
 import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { MedicinesRepository } from './medicines.repository';
 import { MedicineEventsEmitter } from './events/medicine-events.emitter';
+import { BatchesService } from '../batches/batches.service';
 import { CreateMedicineDto, UpdateMedicineDto } from './dto/create-medicine.dto';
 import { QueryMedicinesDto, SearchMedicinesDto } from './dto/query-medicines.dto';
 import { AddBarcodeDto, ChangeStatusDto, CheckDuplicateDto } from './dto/misc.dto';
@@ -29,6 +30,7 @@ type MedicineWithRelations = Prisma.MedicineGetPayload<{
     baseUnit: true;
     purchaseUnit: true;
     saleUnit: true;
+    rack: true;
     barcodes: true;
     unitConversions: true;
   };
@@ -41,6 +43,7 @@ export class MedicinesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly events: MedicineEventsEmitter,
+    private readonly batches: BatchesService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -116,6 +119,7 @@ export class MedicinesService {
 
   async create(user: AuthenticatedUser, dto: CreateMedicineDto): Promise<Record<string, unknown>> {
     await this.validateLookups(user.pharmacyId, dto);
+    await this.validateRack(user.pharmacyId, dto.rackId);
     const prescriptionRequired = this.enforceControlledRule(dto.controlledSubstanceSchedule, dto.prescriptionRequired);
 
     const cost = dto.costPrice ?? 0;
@@ -168,6 +172,7 @@ export class MedicinesService {
       baseUnit: { connect: { id: dto.baseUnitId } },
       purchaseUnit: { connect: { id: dto.purchaseUnitId } },
       saleUnit: { connect: { id: dto.saleUnitId } },
+      ...(dto.rackId ? { rack: { connect: { id: dto.rackId } } } : {}),
       costPrice: cost,
       mrp: dto.mrp ?? 0,
       sellingPrice: selling,
@@ -177,7 +182,7 @@ export class MedicinesService {
       reorderLevel: dto.reorderLevel ?? 10,
       reorderQuantity: dto.reorderQuantity ?? 50,
       maxStockLevel: dto.maxStockLevel,
-      currentStock: dto.currentStock ?? 0,
+      currentStock: dto.currentStock ?? dto.openingStock ?? 0,
       imageUrl: dto.imageUrl,
       documentUrl: dto.documentUrl,
       createdBy: user.userId,
@@ -198,6 +203,27 @@ export class MedicinesService {
     });
     this.events.created({ pharmacyId: user.pharmacyId, branchId, medicineId: created.id, actorId: user.userId });
 
+    // Opening stock: seed a sellable OPENING batch through Batches (→ Inventory).
+    // The medicine record already exists, so we surface any batch failure as-is.
+    if (dto.openingStock && dto.openingStock > 0) {
+      const expiry = dto.openingStockExpiry
+        ? new Date(dto.openingStockExpiry)
+        : new Date(Date.now() + 730 * 86400000); // default +2 years
+      await this.batches.createOrAppendBatch({
+        pharmacyId: user.pharmacyId,
+        branchId: branchId ?? this.resolveBranch(user),
+        medicineId: created.id,
+        batchNumber: dto.openingStockBatchNumber?.trim() || 'OPENING',
+        expiryDate: expiry,
+        quantity: dto.openingStock,
+        unitCost: cost,
+        reasonCode: 'OPENING_STOCK',
+        referenceModule: 'MEDICINE',
+        referenceId: created.id,
+        performedBy: user.userId,
+      });
+    }
+
     return this.serializeDetail(created, user);
   }
 
@@ -210,6 +236,7 @@ export class MedicinesService {
     }
 
     await this.validateLookups(user.pharmacyId, dto);
+    if (dto.rackId !== undefined) await this.validateRack(user.pharmacyId, dto.rackId);
 
     const controlled = dto.controlledSubstanceSchedule !== undefined ? dto.controlledSubstanceSchedule : existing.controlledSubstanceSchedule ?? undefined;
     const prescriptionRequired = this.enforceControlledRule(controlled, dto.prescriptionRequired ?? existing.prescriptionRequired);
@@ -275,6 +302,7 @@ export class MedicinesService {
       ...(dto.baseUnitId ? { baseUnit: { connect: { id: dto.baseUnitId } } } : {}),
       ...(dto.purchaseUnitId ? { purchaseUnit: { connect: { id: dto.purchaseUnitId } } } : {}),
       ...(dto.saleUnitId ? { saleUnit: { connect: { id: dto.saleUnitId } } } : {}),
+      ...(dto.rackId !== undefined ? (dto.rackId ? { rack: { connect: { id: dto.rackId } } } : { rack: { disconnect: true } }) : {}),
     };
 
     const updated = await this.repo.updateWithPriceHistory(id, user.pharmacyId, data, priceEntries);
@@ -427,6 +455,12 @@ export class MedicinesService {
     return branchId;
   }
 
+  private async validateRack(pharmacyId: string, rackId?: string) {
+    if (!rackId) return;
+    const found = await this.prisma.rack.findFirst({ where: { id: rackId, pharmacyId }, select: { id: true } });
+    if (!found) throw new BadRequestException({ errorCode: 'INVALID_LOOKUP', message: 'Referenced rackId does not exist.' });
+  }
+
   private async assertSkuFree(pharmacyId: string, sku: string) {
     const clash = await this.prisma.medicine.findFirst({ where: { pharmacyId, sku }, select: { id: true } });
     if (clash) throw new ConflictException({ errorCode: 'SKU_TAKEN', message: `SKU "${sku}" is already in use.` });
@@ -515,6 +549,8 @@ export class MedicinesService {
       baseUnit: m.baseUnit,
       purchaseUnit: m.purchaseUnit,
       saleUnit: m.saleUnit,
+      rackId: m.rackId,
+      rack: m.rack,
       unitConversions: m.unitConversions,
       mrp: dec(m.mrp),
       sellingPrice: dec(m.sellingPrice),
