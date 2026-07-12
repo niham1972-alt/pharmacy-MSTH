@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogEntry, AuditLogEntryRecord, AuditLogService } from './audit-log.interface';
 import { defaultSeverityFor } from '../../modules/audit-logs/config/action-registry';
 import { computeRecordHash } from '../../modules/audit-logs/integrity/hash-chain.util';
+import { currentImpersonation } from '../context/impersonation-context';
 
 /**
  * Module 15's authoritative `AuditLogService.record()` implementation, behind the
@@ -47,6 +48,10 @@ export class PrismaAuditLogService implements AuditLogService {
         return;
       }
       const severity = (entry.severity as AuditSeverity) ?? defaultSeverityFor(entry.action);
+      // If this write happened inside an impersonation session, stamp the real
+      // platform-staff identity alongside the impersonated tenant user.
+      const imp = currentImpersonation();
+      const metadata = imp ? { ...(entry.metadata ?? {}), impersonatedBy: imp.impersonatedBy, impersonationSessionId: imp.impersonationSessionId } : entry.metadata;
       const performedByName = await this.resolveName(entry.userId);
       const id = randomUUID();
       const createdAt = new Date();
@@ -58,13 +63,13 @@ export class PrismaAuditLogService implements AuditLogService {
         const previousHash = last?.recordHash ?? null;
         const recordHash = computeRecordHash(previousHash, {
           id, pharmacyId: entry.pharmacyId, action: entry.action, entityType: entry.entityType,
-          entityId: entry.entityId ?? null, performedBy: entry.userId, severity, metadata: entry.metadata ?? null, createdAt,
+          entityId: entry.entityId ?? null, performedBy: entry.userId, severity, metadata: metadata ?? null, createdAt,
         });
         await tx.auditLog.create({
           data: {
             id, pharmacyId: entry.pharmacyId, branchId: entry.branchId ?? null, action: entry.action,
             entityType: entry.entityType, entityId: entry.entityId ?? null, performedBy: entry.userId, performedByName,
-            severity, metadata: entry.metadata as never, previousHash, recordHash, createdAt,
+            severity, metadata: metadata as never, previousHash, recordHash, createdAt,
           },
         });
       });

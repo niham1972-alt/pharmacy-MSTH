@@ -1,9 +1,12 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
+import { JwtVerifierModule } from './common/auth/jwt-verifier.module';
+import { PlatformModule } from './platform/platform.module';
+import { TenantIsolationMiddleware } from './platform/middleware/tenant-isolation.middleware';
 import { AuditLogModule } from './common/audit/audit-log.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { MedicinesModule } from './modules/medicines/medicines.module';
@@ -32,6 +35,8 @@ import { HealthController } from './health/health.controller';
       },
     ]),
     PrismaModule,
+    JwtVerifierModule,
+    PlatformModule,
     AuditLogModule,
     DashboardModule,
     MedicinesModule,
@@ -51,4 +56,11 @@ import { HealthController } from './health/health.controller';
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // Defense-in-depth: the tenant-isolation middleware sits in front of EVERY
+  // tenant-facing request (Modules 1–18) and rejects any that reference a
+  // pharmacyId other than the token's. Platform routes are exempted inside it.
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(TenantIsolationMiddleware).forRoutes('*');
+  }
+}

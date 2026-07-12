@@ -1446,3 +1446,149 @@ model PurchaseReturnItem {
   @@index([originalGrnItemId])
   @@index([medicineId])
 }
+
+// ===========================================================================
+// PLATFORM / SUPER-ADMIN LAYER (multi-tenant SaaS management)
+// Sits ABOVE Modules 1–18. Its users are the software vendor's own staff
+// (PlatformStaffUser), never a pharmacy's employees. `Pharmacy` is the tenant
+// entity that every module's `pharmacyId` column refers to.
+// ===========================================================================
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum BillingStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum PlatformRole {
+  SUPER_ADMIN
+  SUPPORT
+  BILLING_OPS
+}
+
+/// The tenant. Every Module 1–18 row's `pharmacyId` references this id. FK
+/// constraints across those modules are intentionally NOT added yet (data-
+/// preserving); the relationship is enforced in application code + this layer.
+model Pharmacy {
+  id                 String        @id @default(uuid())
+  businessName       String
+  contactEmail       String
+  contactPhone       String?
+  status             TenantStatus  @default(TRIAL)
+  subscriptionPlanId String?
+  trialStartedAt     DateTime?
+  trialEndsAt        DateTime?
+  billingStatus      BillingStatus @default(TRIAL)
+  nextRenewalDate    DateTime?
+  suspendedAt        DateTime?
+  suspendedReason    String?
+  archivedAt         DateTime?
+  archivedReason     String?
+  notes              String?
+  createdBy          String // platform staff user id who onboarded this tenant
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+
+  @@index([status])
+  @@index([billingStatus])
+}
+
+model SubscriptionPlan {
+  id                     String     @id @default(uuid())
+  name                   String
+  priceAmount            Decimal    @db.Decimal(10, 2)
+  billingInterval        String // MONTHLY | ANNUAL
+  maxUsers               Int?
+  maxBranches            Int?
+  maxMonthlyTransactions Int?
+  includedFeatures       Json?
+  isActive               Boolean    @default(true)
+  createdAt              DateTime   @default(now())
+  updatedAt             DateTime    @updatedAt
+  pharmacies             Pharmacy[]
+
+  @@unique([name])
+}
+
+/// Platform staff (vendor employees). A DELIBERATELY separate identity space
+/// from Module 16's tenant-scoped `User`. `authUserId` links to Supabase Auth.
+model PlatformStaffUser {
+  id         String       @id @default(uuid())
+  authUserId String       @unique
+  name       String
+  email      String       @unique
+  role       PlatformRole
+  status     String       @default("ACTIVE") // ACTIVE | SUSPENDED
+  createdBy  String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([role])
+}
+
+model ImpersonationSession {
+  id                  String    @id @default(uuid())
+  platformStaffUserId String
+  platformStaffEmail  String
+  targetPharmacyId    String
+  targetUserId        String
+  targetUserEmail     String?
+  reason              String
+  startedAt           DateTime  @default(now())
+  endedAt             DateTime?
+  endedReason         String? // ENDED | EXPIRED | TENANT_ARCHIVED
+  expiresAt           DateTime
+
+  @@index([platformStaffUserId])
+  @@index([targetPharmacyId])
+}
+
+model PlatformAnnouncement {
+  id        String    @id @default(uuid())
+  title     String
+  message   String
+  severity  String    @default("INFO") // INFO | WARNING | CRITICAL
+  startsAt  DateTime  @default(now())
+  endsAt    DateTime?
+  isActive  Boolean   @default(true)
+  createdBy String
+  createdAt DateTime  @default(now())
+}
+
+model FeatureFlag {
+  id                    String   @id @default(uuid())
+  key                   String   @unique
+  description           String?
+  isGloballyEnabled     Boolean  @default(false)
+  enabledForPharmacyIds String[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+/// This layer's OWN audit trail — distinct from each tenant's Module 15 log.
+/// Maximally sensitive given the cross-tenant blast radius.
+model PlatformAuditLog {
+  id           String   @id @default(uuid())
+  platformStaffUserId String
+  platformStaffEmail  String
+  action       String
+  entityType   String
+  entityId     String?
+  targetPharmacyId String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([platformStaffUserId])
+  @@index([action])
+  @@index([targetPharmacyId])
+}

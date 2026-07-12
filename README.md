@@ -340,3 +340,22 @@ This is enforced on the **backend** (RolesGuard + per-field redaction in `Dashbo
 - **Purchases: PO/GRN PDF generation, invoice attachment upload, PO templates, PO amendment** — scaffolded/stubbed (`/orders/:id/pdf`, `/grn/:id/pdf` return "coming soon"; `PurchaseOrderTemplate`/`PurchaseAttachment` models exist). PO line items lock after `DRAFT` (documented limitation — amend via cancel + recreate).
 - **Sales/POS**: the POS screen supports editable cart lines, walk-in/registered **customer** selection (Module 8 stub: `/api/customers` search + quick-add), per-line **and** cart-level **discounts** (%/fixed) with an approval step-up over the 5% cap, **split/multi payments** with live "remaining to pay", **prescription** verify + **controlled-substance** compliance gates (disable Finalize until satisfied), live **stock + FEFO batch** transparency per line (from `/cart/price-check`), quick-pick tiles, barcode auto-refocus, server-persisted **park/resume**, a printable **receipt** modal, and a session-close **variance** summary. Cart math is one shared util (`cartCalculations.ts`) mirrored by the backend so displayed and charged totals never drift. Still deferred: receipt **PDF** generation, Redis hot-path price cache, and true offline-first.
 - Cross-module stub tables (`Sale`, `Medicine`, `MedicineBatch`, `PurchaseOrder`, `Expense`, `AuditLog`, `PharmacySettings`) will be superseded by their owning module's authoritative schema — reconcile via `prisma migrate` when each module is built.
+
+## Platform Layer (Super-Admin / Multi-Tenant Management)
+
+A separate layer **above** Modules 1–18 (`backend/src/platform/`, routes under `/api/platform/*`), run by the software vendor's own staff (`PlatformStaffUser` — a **deliberately separate identity space** from tenant `User`s, with its own `PlatformRole` enum and `PlatformAuthGuard`). It manages tenants (`Pharmacy`), subscription plans, billing status, platform analytics, announcements, feature flags, and audited impersonation.
+
+### 🔒 Tenant-isolation guarantee (read this first)
+
+Multi-tenancy correctness rests on two independent layers:
+
+1. **Primary:** every Module 1–18 query is scoped by the authenticated user's `pharmacyId`, which services derive from the verified JWT claim (`req.user.pharmacyId`) — **never from client input**.
+2. **Defense-in-depth:** `TenantIsolationMiddleware` (`backend/src/platform/middleware/tenant-isolation.middleware.ts`) sits in front of **every** tenant request and **rejects with `403 CROSS_TENANT_DENIED`** any request that carries a `pharmacyId` (in body / query / params, at any nesting depth) different from the token's. A cross-tenant access therefore requires a deliberate bypass, not an easy oversight. `/api/platform/*` is the **only** exemption — the platform layer is the sole part of the system permitted to query across tenants. This is covered by the highest-scrutiny test suite in the codebase (`src/platform/__tests__/tenant-isolation.middleware.spec.ts`).
+
+Tenant **suspension/archival** is enforced tenant-wide and immediately by `TenantStatusService` (cached), which blocks the auth path for every user of a `SUSPENDED`/`ARCHIVED` pharmacy — no per-user JWT re-sync needed. It never touches the tenant's operational data.
+
+### Impersonation (support access)
+
+`super_admin`/`support` can start a time-boxed (hard 30-min cap), reason-gated impersonation session. It issues a **backend-signed, HS256, `typ: 'impersonation'`** token (distinct from a Supabase session) carrying the target user's claims plus a **signed, tamper-evident `impersonatedBy` claim**. Every write during the session is **dual-audited**: recorded in the tenant's own Module 15 log (attributed to the impersonated user, and stamped with `impersonatedBy` via `AsyncLocalStorage` bound in the isolation middleware) **and** in the platform's `ImpersonationSession` record (real staff identity). The tenant-facing app shows a mandatory `ImpersonationBanner` whenever an impersonation token is active.
+
+> **Production hardening (VPS):** deploy the platform app on a separate subdomain/pipeline, provision platform staff in a **separate Supabase project** (dev reuses the tenant project, gated by the `PlatformStaffUser` table), and enforce **MFA** for all `PlatformStaffUser` accounts.

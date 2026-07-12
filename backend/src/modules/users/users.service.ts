@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { SystemRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../../common/audit/audit-log.interface';
@@ -6,6 +6,7 @@ import { AuthenticatedUser } from '../../common/interfaces/authenticated-user.in
 import { SupabaseAdminService } from './supabase-admin.service';
 import { AuthorizationService } from './authorization.service';
 import { UserEventsEmitter } from './events/user-events.emitter';
+import { PlanLimitsService } from '../../platform/plan-limits/plan-limits.service';
 import { PERMISSION_MATRIX, ROLE_CLAIM, ALL_ROLES, isKnownPermissionKey } from './config/permission-matrix.config';
 import { AssignRoleDto, GrantBranchAccessDto, GrantOverrideDto, InviteUserDto, UpdateUserDto } from './dto/users.dto';
 
@@ -17,6 +18,9 @@ export class UsersService {
     private readonly authz: AuthorizationService,
     private readonly events: UserEventsEmitter,
     private readonly audit: AuditLogService,
+    // Platform-layer soft gate (Section 11). @Optional so Module 16 still works if
+    // the platform layer isn't mounted (e.g., isolated unit tests).
+    @Optional() private readonly planLimits?: PlanLimitsService,
   ) {}
 
   private async ensure(user: AuthenticatedUser, id: string) {
@@ -107,6 +111,15 @@ export class UsersService {
       if (dupEmail.status === 'DEACTIVATED') throw new ConflictException({ errorCode: 'USER_DEACTIVATED_EXISTS', message: 'A deactivated user with this email exists. Reactivate that record instead of inviting a new one.', data: { id: dupEmail.id } });
       throw new ConflictException({ errorCode: 'USER_EXISTS', message: 'A user with this email already exists in this pharmacy.', data: { id: dupEmail.id } });
     }
+    // Plan-limit soft gate: block exceeding the tenant's plan user cap with a
+    // clear upgrade message (never a silent failure).
+    if (this.planLimits) {
+      const limit = await this.planLimits.checkCanAddUser(user.pharmacyId);
+      if (!limit.allowed) {
+        throw new BadRequestException({ errorCode: 'PLAN_USER_LIMIT_REACHED', message: limit.message, data: { limit: limit.limit, current: limit.current, planName: limit.planName } });
+      }
+    }
+
     const role = dto.role as SystemRole;
     const branchIds = dto.branchIds && dto.branchIds.length ? dto.branchIds : role === 'SUPER_ADMIN' ? [] : [user.branchId];
     if (role !== 'SUPER_ADMIN' && branchIds.length === 0) throw new BadRequestException({ errorCode: 'BRANCH_REQUIRED', message: 'At least one branch is required for this role.' });

@@ -18,6 +18,6 @@ import { UserEventsEmitter } from './events/user-events.emitter';
 @Module({
   controllers: [UsersController, StepUpAuthController],
   providers: [UsersService, AuthorizationService, StepUpAuthService, SupabaseAdminService, UserEventsEmitter],
-  exports: [AuthorizationService],
+  exports: [AuthorizationService, UsersService],
 })
 export class UsersModule {}
