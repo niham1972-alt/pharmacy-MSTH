@@ -1,4 +1,5 @@
 import { supabase } from '../auth/supabaseClient';
+import { getImpersonationToken } from '../impersonation/session';
 
 export interface ApiError {
   code: string;
@@ -23,9 +24,24 @@ export class ApiClientError extends Error implements ApiError {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; meta?: Record<string, unknown> }> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
+/**
+ * Resolve the bearer token. For TENANT calls (default) an active per-tab
+ * impersonation token wins, so an impersonation tab talks to the backend AS the
+ * tenant user. For PLATFORM calls (`platform: true`) we always use the real
+ * platform-staff Supabase session — this is how "End Impersonation" and every
+ * platform-app request stay attributed to the actual staff, never the impersonee.
+ */
+async function resolveToken(platform: boolean): Promise<string | undefined> {
+  if (!platform) {
+    const imp = getImpersonationToken();
+    if (imp) return imp;
+  }
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token;
+}
+
+async function request<T>(path: string, init?: RequestInit, platform = false): Promise<{ data: T; meta?: Record<string, unknown> }> {
+  const token = await resolveToken(platform);
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -56,4 +72,13 @@ export const apiClient = {
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+};
+
+/** Always authenticates as the real platform-staff Supabase session (never an
+ *  impersonation token) — used by the platform-app and the "End Impersonation" call. */
+export const platformClient = {
+  get: <T>(path: string) => request<T>(path, { method: 'GET' }, true),
+  post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) }, true),
+  put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }, true),
+  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }, true),
 };

@@ -5,8 +5,13 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { AuthProvider } from './shared/auth/AuthContext';
 import { DarkModeProvider } from './shared/hooks/DarkModeContext';
+import { bootstrapImpersonationFromHash } from './shared/impersonation/session';
 import './shared/i18n';
 import './styles/index.css';
+
+// Capture an impersonation token handed to this tab via the URL hash (before any
+// API call fires), so tenant requests in this tab run as the impersonated user.
+bootstrapImpersonationFromHash();
 
 const queryClient = new QueryClient({
   defaultOptions: {

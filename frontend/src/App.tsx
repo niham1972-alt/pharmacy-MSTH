@@ -50,6 +50,7 @@ import { PendingSettlementsPage } from './pages/PurchaseReturns/PendingSettlemen
 import { AuditLogsListPage } from './pages/AuditLogs/AuditLogsListPage';
 import { SensitiveEventsPage } from './pages/AuditLogs/SensitiveEventsPage';
 import { UserActivityPage } from './pages/AuditLogs/UserActivityPage';
+import { PlatformApp } from './platform-app/PlatformApp';
 
 function ProtectedLayout() {
   return (
@@ -161,6 +162,8 @@ function AuditGate() {
 export default function App() {
   return (
     <Routes>
+      {/* Platform-app: entirely separate route tree + auth from the tenant app. */}
+      <Route path="/platform-admin/*" element={<PlatformApp />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />

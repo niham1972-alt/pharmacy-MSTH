@@ -19,7 +19,7 @@ export class TenantsService {
     private readonly prisma: PrismaService,
     private readonly audit: PlatformAuditService,
     private readonly tenantStatus: TenantStatusService,
-    private readonly users: UsersService,
+    private readonly usersService: UsersService,
   ) {}
 
   async list(q: TenantListQuery) {
@@ -112,7 +112,7 @@ export class TenantsService {
         branchId: initialBranchId, accessibleBranchIds: [initialBranchId], email: staff.email,
       };
       try {
-        await this.users.invite(systemActor, { email: dto.adminEmail, name: dto.adminName || dto.adminEmail, role: 'ADMIN', branchIds: [initialBranchId], defaultBranchId: initialBranchId } as never);
+        await this.usersService.invite(systemActor, { email: dto.adminEmail, name: dto.adminName || dto.adminEmail, role: 'ADMIN', branchIds: [initialBranchId], defaultBranchId: initialBranchId } as never);
         adminInvite = { invited: true, email: dto.adminEmail };
       } catch (err) {
         this.logger.error(`Admin invite failed for tenant ${tenant.id}`, err as Error);
@@ -169,6 +169,18 @@ export class TenantsService {
     this.tenantStatus.invalidate(id);
     await this.audit.record(staff, 'TENANT_ARCHIVED', 'PHARMACY', { entityId: id, targetPharmacyId: id, metadata: { reason } });
     return { id, status: 'ARCHIVED' };
+  }
+
+  /** Read-only summary of a tenant's users — for the detail "Users" tab and the
+   *  impersonation target picker. */
+  async users(id: string) {
+    await this.ensure(id);
+    const rows = await this.prisma.user.findMany({
+      where: { pharmacyId: id },
+      include: { roles: { select: { role: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((u) => ({ id: u.id, name: u.name, email: u.email, status: u.status, role: u.roles[0]?.role ?? null }));
   }
 
   async usage(id: string) {

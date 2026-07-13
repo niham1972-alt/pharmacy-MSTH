@@ -31,6 +31,12 @@ export class TenantsController {
     return { data: await this.tenants.usage(id), message: 'Usage fetched' };
   }
 
+  @Get(':id/users')
+  @PlatformRoles('SUPER_ADMIN', 'SUPPORT', 'BILLING_OPS')
+  async users(@Param('id') id: string): Promise<ControllerResult<unknown>> {
+    return { data: await this.tenants.users(id), message: 'Tenant users fetched' };
+  }
+
   @Post()
   @PlatformRoles('SUPER_ADMIN')
   async onboard(@CurrentPlatformStaff() staff: PlatformStaff, @Body() dto: OnboardTenantDto): Promise<ControllerResult<unknown>> {

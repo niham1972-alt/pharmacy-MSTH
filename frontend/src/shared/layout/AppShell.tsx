@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useDarkMode } from '../hooks/DarkModeContext';
 import { BranchSelector } from '../../features/dashboard/components/BranchSelector';
+import { ImpersonationBanner } from '../components/ImpersonationBanner';
 
 // `to: null` marks modules not built yet (rendered disabled). `hideForRoles`
 // hides an item entirely for those roles (e.g. Purchases is off-limits to cashier).
@@ -124,6 +125,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-surface-dark">
+      {/* Mandatory impersonation banner — above everything, on every page. */}
+      <ImpersonationBanner />
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[60] focus:bg-white focus:p-2">Skip to content</a>
 
       <nav ref={navRef} aria-label="Primary navigation" className="no-print sticky top-0 z-40 border-b border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-950/90 backdrop-blur">
