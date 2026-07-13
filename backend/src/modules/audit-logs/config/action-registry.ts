@@ -94,6 +94,13 @@ export const ACTION_REGISTRY: ActionDef[] = [
   { actionKey: 'STORE_CREDIT_ISSUED', label: 'Store credit issued', module: 'Sales Returns', defaultSeverity: 'SENSITIVE' },
   { actionKey: 'STORE_CREDIT_REDEEMED', label: 'Store credit redeemed', module: 'Sales Returns', defaultSeverity: 'SENSITIVE' },
 
+  // Module 11 — Stock Adjustment (fraud/loss-adjacent → heightened severity)
+  { actionKey: 'ADJUSTMENT_CREATED', label: 'Stock adjustment requested', module: 'Stock Adjustment', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'ADJUSTMENT_AUTO_APPROVED', label: 'Stock adjustment auto-approved', module: 'Stock Adjustment', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'ADJUSTMENT_APPROVED', label: 'Stock adjustment approved', module: 'Stock Adjustment', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'ADJUSTMENT_REJECTED', label: 'Stock adjustment rejected', module: 'Stock Adjustment', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'SELF_APPROVAL_ATTEMPT_BLOCKED', label: 'Self-approval attempt blocked', module: 'Stock Adjustment', defaultSeverity: 'CRITICAL' },
+
   // Module 16 — Users & Roles (security-sensitive)
   { actionKey: 'USER_INVITED', label: 'User invited', module: 'Users', defaultSeverity: 'CRITICAL' },
   { actionKey: 'USER_ACTIVATED', label: 'User activated', module: 'Users', defaultSeverity: 'SENSITIVE' },

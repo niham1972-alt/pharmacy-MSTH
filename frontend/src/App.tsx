@@ -51,6 +51,12 @@ import { AuditLogsListPage } from './pages/AuditLogs/AuditLogsListPage';
 import { SensitiveEventsPage } from './pages/AuditLogs/SensitiveEventsPage';
 import { UserActivityPage } from './pages/AuditLogs/UserActivityPage';
 import { PlatformApp } from './platform-app/PlatformApp';
+import { StockAdjustmentsListPage } from './pages/StockAdjustments/StockAdjustmentsListPage';
+import { CreateAdjustmentPage } from './pages/StockAdjustments/CreateAdjustmentPage';
+import { BulkAdjustmentPage } from './pages/StockAdjustments/BulkAdjustmentPage';
+import { StockAdjustmentDetailPage } from './pages/StockAdjustments/StockAdjustmentDetailPage';
+import { PendingApprovalsPage as AdjustmentApprovalsPage } from './pages/StockAdjustments/PendingApprovalsPage';
+import { ShrinkageReportPage } from './pages/StockAdjustments/ShrinkageReportPage';
 
 function ProtectedLayout() {
   return (
@@ -152,6 +158,27 @@ function SettingsGate() {
   return <Outlet />;
 }
 
+/** Stock Adjustments: admin/inventory_manager/accountant/auditor may view (spec §13). */
+function AdjustmentsGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin', 'inventory_manager', 'accountant', 'auditor'].includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
+/** Creating/bulk adjustments: admin/inventory_manager only. */
+function AdjustmentCreateGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin', 'inventory_manager'].includes(user?.role ?? '')) return <Navigate to="/stock-adjustments" replace />;
+  return <Outlet />;
+}
+
+/** Approving adjustments: admin only. */
+function AdjustmentApproveGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin'].includes(user?.role ?? '')) return <Navigate to="/stock-adjustments" replace />;
+  return <Outlet />;
+}
+
 /** Audit Log: admin/auditor only for the global log (spec §13). */
 function AuditGate() {
   const { user } = useAuth();
@@ -238,6 +265,18 @@ export default function App() {
           <Route path="/users" element={<UsersListPage />} />
           <Route path="/users/permission-matrix" element={<PermissionMatrixPage />} />
           <Route path="/users/:id" element={<UserDetailPage />} />
+        </Route>
+        <Route element={<AdjustmentsGate />}>
+          <Route element={<AdjustmentCreateGate />}>
+            <Route path="/stock-adjustments/new" element={<CreateAdjustmentPage />} />
+            <Route path="/stock-adjustments/bulk" element={<BulkAdjustmentPage />} />
+          </Route>
+          <Route element={<AdjustmentApproveGate />}>
+            <Route path="/stock-adjustments/pending" element={<AdjustmentApprovalsPage />} />
+          </Route>
+          <Route path="/stock-adjustments" element={<StockAdjustmentsListPage />} />
+          <Route path="/stock-adjustments/shrinkage" element={<ShrinkageReportPage />} />
+          <Route path="/stock-adjustments/:id" element={<StockAdjustmentDetailPage />} />
         </Route>
         <Route element={<AuditGate />}>
           <Route path="/audit-logs" element={<AuditLogsListPage />} />

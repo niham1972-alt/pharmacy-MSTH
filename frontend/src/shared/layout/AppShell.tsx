@@ -22,6 +22,7 @@ const GROUPS: NavGroup[] = [
       { label: 'Sales History', to: '/sales', hideForRoles: ['inventory_manager'] },
       { label: 'Sales Returns', to: '/sales-returns', hideForRoles: ['inventory_manager'] },
       { label: 'Inventory', to: '/inventory' },
+      { label: 'Stock Adjustments', to: '/stock-adjustments', hideForRoles: ['cashier', 'pharmacist'] },
       { label: 'Batches & Expiry', to: '/batches', hideForRoles: ['cashier', 'accountant'] },
     ],
   },

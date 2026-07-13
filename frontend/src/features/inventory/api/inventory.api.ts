@@ -56,5 +56,5 @@ export const inventoryApi = {
   reorderSuggestions: (branchId?: string | null) => apiClient.get<ReorderSuggestion[]>(`/inventory/reorder-suggestions${qs({ branchId })}`),
   valuation: (branchId?: string | null) => apiClient.get<{ grandTotalValue: number; byCategory: Array<{ category: string; quantity: number; value: number }> }>(`/inventory/valuation${qs({ branchId })}`),
   reconcile: (body: { medicineId: string; countedQuantity: number; notes?: string }) => apiClient.post<{ expectedQuantity: number; countedQuantity: number; variance: number }>('/inventory/reconciliation', body),
-  reconciliationList: (branchId?: string | null) => apiClient.get<Array<{ id: string; name: string; expectedQuantity: number; countedQuantity: number; variance: number; countedAt: string; resolved: boolean }>>(`/inventory/reconciliation${qs({ branchId })}`),
+  reconciliationList: (branchId?: string | null) => apiClient.get<Array<{ id: string; medicineId?: string; name: string; expectedQuantity: number; countedQuantity: number; variance: number; countedAt: string; resolved: boolean }>>(`/inventory/reconciliation${qs({ branchId })}`),
 };

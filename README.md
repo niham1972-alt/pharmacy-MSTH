@@ -359,3 +359,15 @@ Tenant **suspension/archival** is enforced tenant-wide and immediately by `Tenan
 `super_admin`/`support` can start a time-boxed (hard 30-min cap), reason-gated impersonation session. It issues a **backend-signed, HS256, `typ: 'impersonation'`** token (distinct from a Supabase session) carrying the target user's claims plus a **signed, tamper-evident `impersonatedBy` claim**. Every write during the session is **dual-audited**: recorded in the tenant's own Module 15 log (attributed to the impersonated user, and stamped with `impersonatedBy` via `AsyncLocalStorage` bound in the isolation middleware) **and** in the platform's `ImpersonationSession` record (real staff identity). The tenant-facing app shows a mandatory `ImpersonationBanner` whenever an impersonation token is active.
 
 > **Production hardening (VPS):** deploy the platform app on a separate subdomain/pipeline, provision platform staff in a **separate Supabase project** (dev reuses the tenant project, gated by the `PlatformStaffUser` table), and enforce **MFA** for all `PlatformStaffUser` accounts.
+
+## Module 11 — Stock Adjustment
+
+The only sanctioned way to manually correct stock (`/api/stock-adjustments`, `inventory_manager`/`admin` create, `admin` approve). Every correction is reason-coded (`PHYSICAL_COUNT_CORRECTION`, `DAMAGED_BREAKAGE`, `THEFT_LOSS_SUSPECTED`, `DATA_ENTRY_CORRECTION`, `EXPIRED_FOUND_OUTSIDE_PROCESS`, `OTHER`) and fully audited (`SENSITIVE`/`CRITICAL` severity).
+
+- **Threshold gating** (Settings `adjustments.autoApproveMaxQuantity` / `adjustments.autoApproveMaxValue`): a small correction auto-approves and executes immediately; a larger one (by quantity OR value) becomes `PENDING_APPROVAL` with **no stock effect** until an admin approves.
+- **Two-person rule**: an admin **cannot approve their own** request — the attempt is blocked (`SELF_APPROVAL_FORBIDDEN`) and logged (`SELF_APPROVAL_ATTEMPT_BLOCKED`). Approval uses Module 16 step-up re-auth.
+- **Stock execution** is exclusively via Module 5 `InventoryService.recordStockIn/Out` with `POSITIVE_ADJUSTMENT`/`NEGATIVE_ADJUSTMENT`, transactional with the status change. `recordStockOut` re-validates current stock at approval time (stale-delta safety).
+- **Reconciliation-linked**: resolve a Module 5 `StockReconciliation` variance → sets its `resolvedByAdjustmentId`. Also standalone + bulk (per-line validation).
+- **Shrinkage/Loss report** aggregates negative adjustments by reason / medicine / requester (fraud signal).
+
+Endpoints: `POST /`, `POST /bulk`, `GET /`, `GET /:id`, `GET /pending` (admin), `POST /:id/approve`, `POST /:id/reject`, `GET /reports/shrinkage`.

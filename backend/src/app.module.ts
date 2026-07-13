@@ -22,6 +22,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { SalesReturnsModule } from './modules/sales-returns/sales-returns.module';
 import { PurchaseReturnsModule } from './modules/purchase-returns/purchase-returns.module';
+import { StockAdjustmentsModule } from './modules/stock-adjustments/stock-adjustments.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -52,6 +53,7 @@ import { HealthController } from './health/health.controller';
     SettingsModule,
     SalesReturnsModule,
     PurchaseReturnsModule,
+    StockAdjustmentsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

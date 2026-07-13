@@ -1592,3 +1592,60 @@ model PlatformAuditLog {
   @@index([action])
   @@index([targetPharmacyId])
 }
+
+// ===========================================================================
+// MODULE 11: STOCK ADJUSTMENT — the ONLY sanctioned manual stock correction.
+// Reason-coded, threshold-gated (auto-approve vs pending), two-person approval,
+// fully audited. Executes stock exclusively via Module 5 InventoryService with
+// POSITIVE_ADJUSTMENT / NEGATIVE_ADJUSTMENT reason codes.
+// ===========================================================================
+
+enum AdjustmentDirection {
+  INCREASE
+  DECREASE
+}
+
+enum AdjustmentReasonCode {
+  PHYSICAL_COUNT_CORRECTION
+  DAMAGED_BREAKAGE
+  THEFT_LOSS_SUSPECTED
+  DATA_ENTRY_CORRECTION
+  EXPIRED_FOUND_OUTSIDE_PROCESS
+  OTHER
+}
+
+enum AdjustmentStatus {
+  AUTO_APPROVED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+model StockAdjustment {
+  id                     String               @id @default(uuid())
+  pharmacyId             String
+  branchId               String
+  adjustmentNumber       String // ADJ-YYYY-NNNNNN
+  medicineId             String
+  batchId                String?
+  direction              AdjustmentDirection
+  quantity               Int
+  unitCostAtRequest      Decimal              @default(0) @db.Decimal(12, 2) // snapshot for value-threshold + shrinkage valuation
+  reasonCode             AdjustmentReasonCode
+  reasonNote             String?
+  evidenceUrl            String?
+  linkedReconciliationId String? // back-reference to Module 5 StockReconciliation
+  status                 AdjustmentStatus     @default(PENDING_APPROVAL)
+  requestedBy            String
+  requestedAt            DateTime             @default(now())
+  approvedBy             String?
+  approvedAt             DateTime?
+  rejectedReason         String?
+  createdAt              DateTime             @default(now())
+
+  @@unique([pharmacyId, adjustmentNumber])
+  @@index([pharmacyId, branchId, medicineId])
+  @@index([pharmacyId, status])
+  @@index([reasonCode])
+  @@index([linkedReconciliationId])
+}

@@ -56,6 +56,11 @@ export const CORE_SETTINGS: SettingDefinitionInput[] = [
   { key: 'returns.cashierCanProcessResaleable', label: 'Cashiers may process resaleable, non-sensitive returns', description: 'If off, every return needs pharmacist/admin approval.', category: 'Returns', valueType: 'BOOLEAN', defaultValue: true },
   { key: 'returns.approvalRequiredReasons', label: 'Return reasons that force approval', description: 'Return reason codes that always require pharmacist/admin approval regardless of item type.', category: 'Returns', valueType: 'JSON', defaultValue: ['ADVERSE_REACTION'], validationRule: { stringArray: true } },
 
+  // --- Stock Adjustments (Module 11) — a small correction auto-approves; a
+  //     larger one (by quantity OR value) needs a second admin's approval. -----
+  { key: 'adjustments.autoApproveMaxQuantity', label: 'Adjustment auto-approve max quantity', description: 'Adjustments of this many units or fewer auto-approve; larger ones need admin approval.', category: 'Inventory', valueType: 'NUMBER', defaultValue: 10, validationRule: { min: 0 } },
+  { key: 'adjustments.autoApproveMaxValue', label: 'Adjustment auto-approve max value', description: 'Adjustments valued at this amount (quantity × unit cost) or less auto-approve; costlier ones need admin approval.', category: 'Inventory', valueType: 'NUMBER', defaultValue: 5000, validationRule: { min: 0 } },
+
   // --- Customers (Module 8) ------------------------------------------------
   { key: 'customers.phone.regex', label: 'Phone number validation (regex)', category: 'Customers', valueType: 'STRING', defaultValue: '^[+\\d][\\d\\s\\-()]{4,24}$', validationRule: { maxLength: 200 } },
 

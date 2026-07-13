@@ -78,11 +78,17 @@ export function ReconciliationPage() {
       <h2 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Recent counts</h2>
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
         <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-900/40 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2">Medicine</th><th className="px-3 py-2 text-right">Expected</th><th className="px-3 py-2 text-right">Counted</th><th className="px-3 py-2 text-right">Variance</th><th className="px-3 py-2">When</th></tr></thead>
+          <thead className="bg-gray-50 dark:bg-gray-900/40 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2">Medicine</th><th className="px-3 py-2 text-right">Expected</th><th className="px-3 py-2 text-right">Counted</th><th className="px-3 py-2 text-right">Variance</th><th className="px-3 py-2">When</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {(listQ.data?.length ?? 0) === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-500">No reconciliation counts yet.</td></tr>}
+            {(listQ.data?.length ?? 0) === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500">No reconciliation counts yet.</td></tr>}
             {listQ.data?.map((r) => (
-              <tr key={r.id}><td className="px-3 py-2">{r.name}</td><td className="px-3 py-2 text-right">{r.expectedQuantity}</td><td className="px-3 py-2 text-right">{r.countedQuantity}</td><td className={`px-3 py-2 text-right font-medium ${r.variance === 0 ? 'text-green-600' : 'text-orange-600'}`}>{r.variance > 0 ? '+' : ''}{r.variance}</td><td className="px-3 py-2 text-gray-500">{new Date(r.countedAt).toLocaleDateString()}</td></tr>
+              <tr key={r.id}><td className="px-3 py-2">{r.name}</td><td className="px-3 py-2 text-right">{r.expectedQuantity}</td><td className="px-3 py-2 text-right">{r.countedQuantity}</td><td className={`px-3 py-2 text-right font-medium ${r.variance === 0 ? 'text-green-600' : 'text-orange-600'}`}>{r.variance > 0 ? '+' : ''}{r.variance}</td><td className="px-3 py-2 text-gray-500">{new Date(r.countedAt).toLocaleDateString()}</td>
+                <td className="px-3 py-2 text-right">
+                  {r.resolved ? <span className="text-xs text-green-600">✓ resolved</span> : r.variance !== 0 ? (
+                    <Link to={`/stock-adjustments/new?reconciliationId=${r.id}&medicineId=${r.medicineId ?? ''}&medicineName=${encodeURIComponent(r.name)}&variance=${r.variance}&expected=${r.expectedQuantity}&counted=${r.countedQuantity}`} className="rounded-md bg-brand-600 px-2 py-1 text-xs font-medium text-white hover:bg-brand-700">Create Adjustment</Link>
+                  ) : <span className="text-xs text-gray-400">—</span>}
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>
