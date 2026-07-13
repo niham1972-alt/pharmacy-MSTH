@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from '@nestjs/common';
+import { resolve, join } from 'path';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -23,7 +25,13 @@ async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
   assertCriticalEnv(logger);
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Serve VPS-stored uploads as static files (fallback; Nginx serves these in
+  // production). Path + public prefix mirror StorageService.
+  const uploadsRoot = resolve(process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads'));
+  const uploadsPrefix = (process.env.PUBLIC_UPLOADS_BASE ?? '/uploads').replace(/\/$/, '');
+  app.useStaticAssets(uploadsRoot, { prefix: uploadsPrefix });
 
   const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:5173')
     .split(',')

@@ -1,0 +1,48 @@
+# One-command deploy for a single Oracle Cloud VPS (works on Ampere/arm64 + x86).
+#   frontend (nginx) :80  →  reverse-proxies /api to backend, serves /uploads volume
+#   backend  (nest)  :3000 (internal only)  →  Supabase Postgres (managed) + local uploads
+#
+# Usage (from the repo's deploy/ folder on the VPS):
+#   1) cp backend.env.example backend.env   # fill in real Supabase values
+#   2) cp .env.example .env                 # fill in VITE_* (baked into the frontend build)
+#   3) docker compose up -d --build
+#
+# `docker compose --env-file .env` auto-loads .env for the ${VITE_*} build args below.
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - backend.env
+    environment:
+      UPLOAD_DIR: /app/uploads
+      PUBLIC_UPLOADS_BASE: /uploads
+    volumes:
+      - uploads:/app/uploads
+    # Apply pending migrations, then start. Idempotent on every (re)start.
+    command: sh -c "npm run migrate:deploy && node dist/main.js"
+    expose:
+      - "3000"
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    volumes:
+      # Same volume the backend writes to — Nginx serves uploads read-only.
+      - uploads:/uploads:ro
+
+volumes:
+  uploads:

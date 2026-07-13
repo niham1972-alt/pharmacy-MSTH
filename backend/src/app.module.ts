@@ -23,6 +23,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { SalesReturnsModule } from './modules/sales-returns/sales-returns.module';
 import { PurchaseReturnsModule } from './modules/purchase-returns/purchase-returns.module';
 import { StockAdjustmentsModule } from './modules/stock-adjustments/stock-adjustments.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -54,6 +55,7 @@ import { HealthController } from './health/health.controller';
     SalesReturnsModule,
     PurchaseReturnsModule,
     StockAdjustmentsModule,
+    StorageModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

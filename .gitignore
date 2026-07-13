@@ -14,3 +14,7 @@ Thumbs.db
 backend/generated/
 frontend/dist/
 backend/logs.txt
+
+# Runtime file storage (Module: VPS storage)
+uploads/
+backend/uploads/

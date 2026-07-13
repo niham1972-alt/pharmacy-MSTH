@@ -1,0 +1,10 @@
+# Root .dockerignore — applies to the frontend image build (context = repo root).
+# Keeps host node_modules/dist (and any local .env) out of the image so a fresh,
+# arch-correct npm install runs inside the container.
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.local
+**/*.log
+.git
