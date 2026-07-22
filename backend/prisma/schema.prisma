@@ -995,16 +995,124 @@ model PurchaseOrderTemplate {
   @@unique([pharmacyId, name])
 }
 
-/// STUB — see Module 13 (Expenses)
-model Expense {
-  id          String   @id @default(uuid())
-  pharmacyId  String
-  branchId    String
-  amount      Decimal  @db.Decimal(12, 2)
-  expenseDate DateTime @default(now())
-  category    String
+// ---------------------------------------------------------------------------
+// Module 13: Expenses Management — AUTHORITATIVE (supersedes the Module 1 stub).
+// Non-inventory operating costs (rent, utilities, salaries, licenses, …) with
+// categorization, recurring templates, partial-payment tracking, an approval
+// workflow, and a consolidated payables view that READS Module 3 alongside it.
+// ---------------------------------------------------------------------------
+enum ExpensePaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
 
-  @@index([pharmacyId, branchId, expenseDate])
+enum ExpenseApprovalStatus {
+  NOT_REQUIRED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum ExpenseRecurrenceFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+model ExpenseCategory {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  name       String
+  parentId   String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  parent   ExpenseCategory?  @relation("ExpenseCategoryHierarchy", fields: [parentId], references: [id])
+  children ExpenseCategory[] @relation("ExpenseCategoryHierarchy")
+  expenses Expense[]
+  templates RecurringExpenseTemplate[]
+
+  @@unique([pharmacyId, name, parentId])
+  @@index([pharmacyId, isActive])
+}
+
+model RecurringExpenseTemplate {
+  id                  String                     @id @default(uuid())
+  pharmacyId          String
+  branchId            String
+  categoryId          String
+  payeeName           String
+  defaultAmount       Decimal?                   @db.Decimal(12, 2) // nullable if amount varies each period (e.g. utilities)
+  recurrenceFrequency ExpenseRecurrenceFrequency
+  dayOfPeriod         Int // 1–28 for monthly (avoids month-length ambiguity); day-of-quarter/year otherwise
+  notes               String?
+  isActive            Boolean                    @default(true)
+  startedAt           DateTime                   @default(now())
+  endedAt             DateTime?
+  lastGeneratedPeriod String? // "YYYY-MM" / "YYYY-Qn" / "YYYY" — fast idempotency guard
+  createdBy           String
+  createdAt           DateTime                   @default(now())
+
+  category          ExpenseCategory @relation(fields: [categoryId], references: [id])
+  generatedExpenses Expense[]
+
+  @@index([pharmacyId, branchId, isActive])
+}
+
+model Expense {
+  id            String               @id @default(uuid())
+  pharmacyId    String
+  branchId      String
+  expenseNumber String // EXP-YYYY-NNNNNN
+  categoryId    String
+  payeeName     String
+  amount        Decimal              @db.Decimal(12, 2)
+  incurredDate  DateTime             @default(now())
+  dueDate       DateTime?
+  paymentStatus ExpensePaymentStatus @default(UNPAID)
+  amountPaid    Decimal              @default(0) @db.Decimal(12, 2)
+
+  approvalStatus ExpenseApprovalStatus @default(NOT_REQUIRED)
+  approvedBy     String?
+  approvedAt     DateTime?
+  rejectedReason String?
+
+  generatedFromTemplateId String? // set if auto-generated from a RecurringExpenseTemplate
+  periodKey               String? // template period this instance covers ("YYYY-MM" etc.) — idempotency
+  receiptUrl              String? // data-URL or external URL, consistent with GRN/adjustment attachments
+  notes                   String?
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category ExpenseCategory           @relation(fields: [categoryId], references: [id])
+  template RecurringExpenseTemplate? @relation(fields: [generatedFromTemplateId], references: [id])
+  payments ExpensePayment[]
+
+  @@unique([pharmacyId, expenseNumber])
+  // Idempotency: at most one generated expense per template + period.
+  @@unique([generatedFromTemplateId, periodKey])
+  @@index([pharmacyId, branchId, incurredDate])
+  @@index([pharmacyId, categoryId])
+  @@index([pharmacyId, paymentStatus, dueDate])
+}
+
+model ExpensePayment {
+  id              String   @id @default(uuid())
+  pharmacyId      String
+  expenseId       String
+  amount          Decimal  @db.Decimal(12, 2)
+  paymentDate     DateTime @default(now())
+  method          String // CASH | BANK_TRANSFER | CHEQUE | CARD | OTHER
+  referenceNumber String?
+  notes           String?
+  recordedBy      String
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
 }
 
 /// STUB — see Module 15 (Audit Logs)
@@ -1648,4 +1756,76 @@ model StockAdjustment {
   @@index([pharmacyId, status])
   @@index([reasonCode])
   @@index([linkedReconciliationId])
+}
+
+// ---------------------------------------------------------------------------
+// Module 14: Reports & Analytics — a READ-ONLY aggregation layer over every
+// other module's data. It owns NO transactional tables; the only data it
+// durably stores is (a) configuration/scheduling metadata and (b) pre-aggregated
+// read models (DailySalesSummary/DailyExpenseSummary) that are always
+// regenerable from the live source tables and never treated as authoritative if
+// they drift. See backend/src/modules/reports + README "Module 14".
+// ---------------------------------------------------------------------------
+enum ExportJobStatus {
+  GENERATING
+  READY
+  FAILED
+}
+
+model SavedReportConfiguration {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  userId     String
+  reportType String // "PROFIT_LOSS" | "SALES_REGISTER" | "STOCK_VALUATION" | …
+  name       String
+  filters    Json // { dateRangeType: "rolling_last_month" | "custom", customFrom?, customTo?, branchId?, … }
+  createdAt  DateTime @default(now())
+
+  @@index([pharmacyId, userId])
+}
+
+model ReportExportJob {
+  id          String          @id @default(uuid())
+  pharmacyId  String
+  reportType  String
+  filters     Json
+  format      String // "CSV" | "PDF"
+  status      ExportJobStatus @default(GENERATING)
+  fileUrl     String? // data-URL of the generated artifact (self-contained storage)
+  fileName    String?
+  error       String?
+  requestedBy String
+  createdAt   DateTime        @default(now())
+  completedAt DateTime?
+
+  @@index([pharmacyId, requestedBy, createdAt])
+}
+
+// Pre-aggregated read models (populated by the nightly aggregation job, read by
+// report queries for older periods; live queries cover the not-yet-aggregated tail).
+model DailySalesSummary {
+  id                 String   @id @default(uuid())
+  pharmacyId         String
+  branchId           String
+  date               DateTime // UTC midnight of the summarized day
+  totalRevenue       Decimal  @db.Decimal(14, 2)
+  totalCost          Decimal  @db.Decimal(14, 2)
+  totalTax           Decimal  @db.Decimal(14, 2)
+  transactionCount   Int
+  totalReturnsAmount Decimal  @default(0) @db.Decimal(14, 2)
+
+  @@unique([pharmacyId, branchId, date])
+  @@index([pharmacyId, branchId, date])
+}
+
+model DailyExpenseSummary {
+  id          String   @id @default(uuid())
+  pharmacyId  String
+  branchId    String
+  date        DateTime // UTC midnight of the summarized day
+  categoryId  String
+  totalAmount Decimal  @db.Decimal(14, 2)
+
+  @@unique([pharmacyId, branchId, date, categoryId])
+  @@index([pharmacyId, branchId, date])
 }

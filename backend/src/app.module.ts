@@ -23,6 +23,8 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { SalesReturnsModule } from './modules/sales-returns/sales-returns.module';
 import { PurchaseReturnsModule } from './modules/purchase-returns/purchase-returns.module';
 import { StockAdjustmentsModule } from './modules/stock-adjustments/stock-adjustments.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { HealthController } from './health/health.controller';
 
@@ -55,6 +57,8 @@ import { HealthController } from './health/health.controller';
     SalesReturnsModule,
     PurchaseReturnsModule,
     StockAdjustmentsModule,
+    ExpensesModule,
+    ReportsModule,
     StorageModule,
   ],
   controllers: [HealthController],

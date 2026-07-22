@@ -101,6 +101,25 @@ export const ACTION_REGISTRY: ActionDef[] = [
   { actionKey: 'ADJUSTMENT_REJECTED', label: 'Stock adjustment rejected', module: 'Stock Adjustment', defaultSeverity: 'SENSITIVE' },
   { actionKey: 'SELF_APPROVAL_ATTEMPT_BLOCKED', label: 'Self-approval attempt blocked', module: 'Stock Adjustment', defaultSeverity: 'CRITICAL' },
 
+  // Module 13 — Expenses (financial record integrity → heightened severity)
+  { actionKey: 'EXPENSE_CREATED', label: 'Expense recorded', module: 'Expenses', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'EXPENSE_UPDATED', label: 'Expense updated', module: 'Expenses', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'EXPENSE_APPROVED', label: 'Expense approved', module: 'Expenses', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'EXPENSE_REJECTED', label: 'Expense rejected', module: 'Expenses', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'EXPENSE_PAYMENT_RECORDED', label: 'Expense payment recorded', module: 'Expenses', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'EXPENSE_CATEGORY_CREATED', label: 'Expense category created', module: 'Expenses', defaultSeverity: 'ROUTINE' },
+  { actionKey: 'EXPENSE_CATEGORY_UPDATED', label: 'Expense category updated', module: 'Expenses', defaultSeverity: 'ROUTINE' },
+  { actionKey: 'EXPENSE_CATEGORY_DELETED', label: 'Expense category deactivated', module: 'Expenses', defaultSeverity: 'ROUTINE' },
+  { actionKey: 'RECURRING_TEMPLATE_CREATED', label: 'Recurring expense template created', module: 'Expenses', defaultSeverity: 'ROUTINE' },
+  { actionKey: 'RECURRING_TEMPLATE_UPDATED', label: 'Recurring expense template updated', module: 'Expenses', defaultSeverity: 'ROUTINE' },
+  { actionKey: 'RECURRING_TEMPLATE_ENDED', label: 'Recurring expense template ended', module: 'Expenses', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'RECURRING_EXPENSE_AUTO_GENERATED', label: 'Recurring expense auto-generated', module: 'Expenses', defaultSeverity: 'ROUTINE' },
+
+  // Module 14 — Reports & Analytics (a large data export is a meaningful event)
+  { actionKey: 'REPORT_EXPORTED', label: 'Report exported', module: 'Reports', defaultSeverity: 'SENSITIVE' },
+  { actionKey: 'SAVED_REPORT_CONFIGURATION_CREATED', label: 'Saved report configuration created', module: 'Reports', defaultSeverity: 'ROUTINE' },
+  { actionKey: 'SAVED_REPORT_CONFIGURATION_DELETED', label: 'Saved report configuration deleted', module: 'Reports', defaultSeverity: 'ROUTINE' },
+
   // Module 16 — Users & Roles (security-sensitive)
   { actionKey: 'USER_INVITED', label: 'User invited', module: 'Users', defaultSeverity: 'CRITICAL' },
   { actionKey: 'USER_ACTIVATED', label: 'User activated', module: 'Users', defaultSeverity: 'SENSITIVE' },

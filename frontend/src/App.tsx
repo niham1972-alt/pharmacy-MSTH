@@ -57,6 +57,16 @@ import { BulkAdjustmentPage } from './pages/StockAdjustments/BulkAdjustmentPage'
 import { StockAdjustmentDetailPage } from './pages/StockAdjustments/StockAdjustmentDetailPage';
 import { PendingApprovalsPage as AdjustmentApprovalsPage } from './pages/StockAdjustments/PendingApprovalsPage';
 import { ShrinkageReportPage } from './pages/StockAdjustments/ShrinkageReportPage';
+import { ExpensesListPage } from './pages/Expenses/ExpensesListPage';
+import { ExpenseDetailPage } from './pages/Expenses/ExpenseDetailPage';
+import { RecurringTemplatesPage } from './pages/Expenses/RecurringTemplatesPage';
+import { ConsolidatedPayablesPage } from './pages/Expenses/ConsolidatedPayablesPage';
+import { ExpenseSummaryReportPage } from './pages/Expenses/ExpenseSummaryReportPage';
+import { ReportsHomePage } from './pages/Reports/ReportsHomePage';
+import { GenericReportPage } from './pages/Reports/GenericReportPage';
+import { SavedReportsPage } from './pages/Reports/SavedReportsPage';
+import { ComplianceReportsPage } from './pages/Reports/ComplianceReportsPage';
+import { ProfitLossReportPage, SalesRegisterPage, StockValuationReportPage, ExpiringStockReportPage, TopSellingReportPage, SupplierPerformanceReportPage } from './pages/Reports/namedReports';
 
 function ProtectedLayout() {
   return (
@@ -179,6 +189,21 @@ function AdjustmentApproveGate() {
   return <Outlet />;
 }
 
+/** Expenses: admin/accountant/auditor only — financial/administrative domain (spec §13). */
+function ExpensesGate() {
+  const { user } = useAuth();
+  if (!['super_admin', 'admin', 'accountant', 'auditor'].includes(user?.role ?? '')) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
+/** Reports: every role except cashier has access to at least one report (spec §13);
+ *  per-report access is enforced within each report (mirrors its source module). */
+function ReportsGate() {
+  const { user } = useAuth();
+  if (user?.role === 'cashier') return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
+}
+
 /** Audit Log: admin/auditor only for the global log (spec §13). */
 function AuditGate() {
   const { user } = useAuth();
@@ -277,6 +302,25 @@ export default function App() {
           <Route path="/stock-adjustments" element={<StockAdjustmentsListPage />} />
           <Route path="/stock-adjustments/shrinkage" element={<ShrinkageReportPage />} />
           <Route path="/stock-adjustments/:id" element={<StockAdjustmentDetailPage />} />
+        </Route>
+        <Route element={<ExpensesGate />}>
+          <Route path="/expenses/templates" element={<RecurringTemplatesPage />} />
+          <Route path="/expenses/payables" element={<ConsolidatedPayablesPage />} />
+          <Route path="/expenses/summary" element={<ExpenseSummaryReportPage />} />
+          <Route path="/expenses" element={<ExpensesListPage />} />
+          <Route path="/expenses/:id" element={<ExpenseDetailPage />} />
+        </Route>
+        <Route element={<ReportsGate />}>
+          <Route path="/reports" element={<ReportsHomePage />} />
+          <Route path="/reports/saved" element={<SavedReportsPage />} />
+          <Route path="/reports/compliance" element={<ComplianceReportsPage />} />
+          <Route path="/reports/profit-loss" element={<ProfitLossReportPage />} />
+          <Route path="/reports/sales-register" element={<SalesRegisterPage />} />
+          <Route path="/reports/stock-valuation" element={<StockValuationReportPage />} />
+          <Route path="/reports/expiring-stock" element={<ExpiringStockReportPage />} />
+          <Route path="/reports/top-selling" element={<TopSellingReportPage />} />
+          <Route path="/reports/supplier-performance" element={<SupplierPerformanceReportPage />} />
+          <Route path="/reports/:reportKey" element={<GenericReportPage />} />
         </Route>
         <Route element={<AuditGate />}>
           <Route path="/audit-logs" element={<AuditLogsListPage />} />

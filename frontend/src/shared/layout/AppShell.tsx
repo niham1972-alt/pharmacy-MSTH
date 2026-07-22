@@ -42,11 +42,18 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Finance',
+    items: [
+      { label: 'Expenses', to: '/expenses', hideForRoles: ['pharmacist', 'inventory_manager', 'cashier'] },
+      { label: 'Consolidated Payables', to: '/expenses/payables', hideForRoles: ['pharmacist', 'inventory_manager', 'cashier'] },
+      { label: 'Reports', to: '/reports', hideForRoles: ['cashier'] },
+    ],
+  },
+  {
     label: 'Admin',
     items: [
       { label: 'Audit Log', to: '/audit-logs', hideForRoles: ['pharmacist', 'inventory_manager', 'cashier', 'accountant'] },
       { label: 'Settings', to: '/settings', hideForRoles: ['pharmacist', 'cashier', 'accountant'] },
-      { label: 'Reports', to: null },
     ],
   },
 ];

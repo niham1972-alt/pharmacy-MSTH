@@ -61,6 +61,16 @@ export const CORE_SETTINGS: SettingDefinitionInput[] = [
   { key: 'adjustments.autoApproveMaxQuantity', label: 'Adjustment auto-approve max quantity', description: 'Adjustments of this many units or fewer auto-approve; larger ones need admin approval.', category: 'Inventory', valueType: 'NUMBER', defaultValue: 10, validationRule: { min: 0 } },
   { key: 'adjustments.autoApproveMaxValue', label: 'Adjustment auto-approve max value', description: 'Adjustments valued at this amount (quantity × unit cost) or less auto-approve; costlier ones need admin approval.', category: 'Inventory', valueType: 'NUMBER', defaultValue: 5000, validationRule: { min: 0 } },
 
+  // --- Expenses (Module 13) — mirrors the Purchases PO approval-threshold
+  //     pattern: an expense at/under the threshold is payable immediately; a
+  //     larger one needs a second admin's approval before payment. -------------
+  { key: 'expenses.approval.thresholdAmount', label: 'Expense approval threshold', description: 'Expenses above this amount require admin approval before a payment can be recorded. Can vary per branch.', category: 'Expenses', valueType: 'NUMBER', defaultValue: 25000, validationRule: { min: 0 }, scope: 'BRANCH' },
+  { key: 'expenses.approval.deviationPercent', label: 'Recurring deviation approval (%)', description: 'A recurring-generated expense whose amount exceeds its template default by more than this percent is flagged for approval even if under the threshold (catches data-entry slips).', category: 'Expenses', valueType: 'NUMBER', defaultValue: 25, validationRule: { min: 0, max: 1000 } },
+
+  // --- Reports & Analytics (Module 14) -------------------------------------
+  { key: 'reports.maxSyncRangeDays', label: 'Max synchronous report range (days)', description: 'Reports over a range wider than this must use the async export path rather than a live inline query, protecting the API from an accidentally huge scan.', category: 'Reports', valueType: 'NUMBER', defaultValue: 366, validationRule: { min: 1, max: 3660 } },
+  { key: 'reports.maxExportRangeDays', label: 'Max export range (days)', description: 'Hard cap on the date span of a single export request; wider spans must be split into smaller periods.', category: 'Reports', valueType: 'NUMBER', defaultValue: 1100, validationRule: { min: 1, max: 3660 } },
+
   // --- Customers (Module 8) ------------------------------------------------
   { key: 'customers.phone.regex', label: 'Phone number validation (regex)', category: 'Customers', valueType: 'STRING', defaultValue: '^[+\\d][\\d\\s\\-()]{4,24}$', validationRule: { maxLength: 200 } },
 

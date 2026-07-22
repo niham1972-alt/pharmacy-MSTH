@@ -83,8 +83,10 @@ export class DashboardRepository {
   }
 
   async getMonthExpensesTotal(pharmacyId: string, branchId: string, from: Date, to: Date): Promise<number> {
+    // Module 13 is now authoritative for expenses. Count every non-rejected
+    // expense incurred in the window (rejected ones never became real costs).
     const result = await this.prisma.expense.aggregate({
-      where: { pharmacyId, branchId, expenseDate: { gte: from, lte: to } },
+      where: { pharmacyId, branchId, incurredDate: { gte: from, lte: to }, approvalStatus: { not: 'REJECTED' } },
       _sum: { amount: true },
     });
     return toNumber(result._sum.amount);
